@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -33,7 +34,7 @@ static void* mapLibraryFile(const char* path) {
 }
 
 
-DyLibTable* dynLibBuild(SymbolTable* globalSymTable, const char** libPath, char* libs[32]) {
+DyLibTable* dynLibBuild(SymbolTable* globalSymTable, char* libPath[8], char* libs[32]) {
 	// For each unresolved symbol in the global symbol table
 	// 	Open each linked library, search it in path
 	// 	If found, open it; for each symbol in the lib, check if it matches the unresolved symbol
@@ -61,7 +62,7 @@ DyLibTable* dynLibBuild(SymbolTable* globalSymTable, const char** libPath, char*
 				AOEFFheader* header = (AOEFFheader*) lib;
 
 				AOEFFSymbEntry* adlibSymbTable = (AOEFFSymbEntry*) (lib + header->hSymbOff);
-				AOEFFStringTab* adlibStrTab = (AOEFFStringTab*) (lib + header->hStrTabOff);
+				AOEFFStrTab* adlibStrTab = (AOEFFStrTab*) (lib + header->hStrTabOff);
 
 				// Look for the unresolved symbol in this library's symbol table
 				for (int m = 0; m < header->hSymbSize; m++) {

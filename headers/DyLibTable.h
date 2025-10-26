@@ -34,7 +34,7 @@ void deinitDyLibTable(DyLibTable* table);
  * @param symbName The name of the symbol to add
  * @return The dynamic library table entry the symbol was added to
  */
-DyLibTableEntry* addDyLibSymb(DyLibTable* dylibTable, const char* libName, AOEFFSymbEntry* symbol, char* symbName);
+DyLibTableEntry* addDyLibSymb(DyLibTable* dylibTable, const char* libName, AOEFFSymbEntry* symbol, const char* symbName);
 
 void showDyLibTable(DyLibTable* table);
 

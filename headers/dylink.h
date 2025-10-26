@@ -10,4 +10,4 @@
  * @param libs 
  * @return 
  */
-DyLibTable* dynLibBuild(SymbolTable* globalSymTable, const char** libPath, char* libs[32]);
+DyLibTable* dynLibBuild(SymbolTable* globalSymTable, char* libPath[8], char* libs[32]);

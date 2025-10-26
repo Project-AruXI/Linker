@@ -9,15 +9,42 @@
 #include "dylink.h"
 
 
-Config config;
+Config config = {
+		.outfile = "out.aru",
+		.libpath = { "./libs", NULL },
+		.libs    = { "std.adlib", NULL },
+};
 
-static char** parseArgs(int argc, char const* argv[]) {
-	// Init config with defaults
-	config.outfile = "out.aru";
-	config.libpath = "./libs";
-	config.libs[0] = "std.adlib"; // Default standard library
-	config.libs[1] = NULL;
 
+static int linkLibCallback(struct argparse* self, const struct argparse_option* option) {
+	// Each time this is called, a new library is being added
+	// Find the first NULL entry in config.libs and add it there
+	for (int i = 1; i < MAX_LIBS; i++) {
+		if (config.libs[i] == NULL) {
+			config.libs[i] = (char*) self->optvalue;
+			config.libs[i + 1] = NULL;
+			break;
+		}
+	}
+
+	return 0;
+}
+
+static int libpathCallback(struct argparse* self, const struct argparse_option* option) {
+	// Each time this is called, a new library path is being added
+	// Find the first NULL entry in config.libpath and add it there
+	for (int i = 1; i < MAX_LIBPATHS; i++) {
+		if (config.libpath[i] == NULL) {
+			config.libpath[i] = (char*) self->optvalue;
+			config.libpath[i + 1] = NULL;
+			break;
+		}
+	}
+
+	return 0;
+}
+
+static const char** parseArgs(int argc, char const* argv[]) {
 	const char** infiles = NULL;
 
 	bool showVersion = false;
@@ -25,6 +52,8 @@ static char** parseArgs(int argc, char const* argv[]) {
 	struct argparse_option options[] = {
 		OPT_STRING('o', "output", &config.outfile, "output file name", NULL, 0, 0),
 		OPT_BOOLEAN('v', "version", &showVersion, "show version and exit", NULL, 0, 0),
+		OPT_STRING('l', "library", NULL, "library to link against", &linkLibCallback, 0, 0),
+		OPT_STRING('L', "libpath", NULL, "library search path", &libpathCallback, 0, 0),
 		OPT_HELP(),
 		OPT_END(),
 	};
@@ -40,7 +69,7 @@ static char** parseArgs(int argc, char const* argv[]) {
 	int nparsed = argparse_parse(&argparse, argc, argv);
 
 	if (showVersion) {
-		printf("Aru Linker version 1.0.0\n");
+		printf("Aru Linker version %d.%d.%d\n", MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION);
 		exit(0);
 	}
 
@@ -53,10 +82,8 @@ static char** parseArgs(int argc, char const* argv[]) {
 	}
 
 	infiles = malloc((nparsed + 1) * sizeof(char*));
-	if (!infiles) {
-		fprintf(stderr, "Out of memory\n");
-		exit(1);
-	}
+	if (!infiles) emitError(ERR_MEM, "Failed to allocate memory for input file list");
+
 	for (int i = 0; i < nparsed; ++i) {
 		infiles[i] = argv[i];
 	}
@@ -67,10 +94,22 @@ static char** parseArgs(int argc, char const* argv[]) {
 }
 
 int main(int argc, char const* argv[]) {
-	char** infiles = parseArgs(argc, argv);
+	initScope("main");
 
+	const char** infiles = parseArgs(argc, argv);
+
+	rlog("Output file: %s", config.outfile);
+	rlog("Input files:");
 	for (int i = 0; infiles[i] != NULL; i++) {
-		printf("%s\n", infiles[i]);
+		rlog("%s", infiles[i]);
+	}
+
+	for (int i = 0; config.libs[i] != NULL; i++) {
+		rlog("Linking against library: %s", config.libs[i]);
+	}
+
+	for (int i = 0; config.libpath[i] != NULL; i++) {
+		rlog("Library search path: %s", config.libpath[i]);
 	}
 
 	// Validate that the linked libraries exists
@@ -92,7 +131,7 @@ int main(int argc, char const* argv[]) {
 
 	for (int i = 0; infiles[i] != NULL; i++) {
 		const char* infile = infiles[i];
-		merge();
+		// merge();
 		
 	}
 

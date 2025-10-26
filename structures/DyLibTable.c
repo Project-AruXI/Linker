@@ -47,7 +47,7 @@ static DyLibTableEntry* addDyLib(DyLibTable* dylibTable, const char* libName) {
 	return newEntry;
 }
 
-DyLibTableEntry* addDyLibSymb(DyLibTable* dylibTable, const char* libName, AOEFFSymbEntry* symbol, char* symbName) {
+DyLibTableEntry* addDyLibSymb(DyLibTable* dylibTable, const char* libName, AOEFFSymbEntry* symbol, const char* symbName) {
 	DyLibTableEntry* dylib = NULL;
 
 	// Check if the library already exists in the table
@@ -82,10 +82,10 @@ DyLibTableEntry* addDyLibSymb(DyLibTable* dylibTable, const char* libName, AOEFF
 void showDyLibTable(DyLibTable* table) {
 	for (uint32_t i = 0; i < table->count; i++) {
 		DyLibTableEntry* entry = &table->entries[i];
-		printf("Library: %s\n", entry->lib);
-		printf("  Symbols:\n");
+		rlog("Library: %s\n", entry->lib);
+		rlog("  Symbols:\n");
 		for (uint32_t j = 0; j < entry->symbCount; j++) {
-			printf("    Symbol %u: Name Index: %u, Name: %s, Size: %u, Value: %u, Info: %u, Section: %u\n",
+			rlog("    Symbol %u: Name Index: %u, Name: %s, Size: %u, Value: %u, Info: %u, Section: %u\n",
 				j,
 				entry->symbols[j].seSymbName,
 				entry->symbNames[j],

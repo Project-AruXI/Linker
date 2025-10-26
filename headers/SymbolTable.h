@@ -22,7 +22,7 @@ typedef struct SymbolTable {
 	} unresolved;
 
 	struct {
-		AOEFFStringTab strTab;
+		AOEFFStrTab strTab;
 		uint32_t strbCount; // The number of bytes used in the string table
 		uint32_t strbCap;   // The capacity of the string table in bytes
 
