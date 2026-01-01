@@ -5,14 +5,15 @@
 #include "argparse.h"
 #include "diagnostics.h"
 #include "config.h"
-#include "SymbolTable.h"
 #include "dylink.h"
+#include "merge.h"
 
 
 Config config = {
-		.outfile = "out.aru",
-		.libpath = { "./libs", NULL },
-		.libs    = { "std.adlib", NULL },
+	.outfile = "out.aru",
+	.useStdLib = false, // For now, there is no stdlib
+	.libpath = { "./libs", NULL },
+	.libs    = { "std.adlib", NULL },
 };
 
 
@@ -54,6 +55,7 @@ static const char** parseArgs(int argc, char const* argv[]) {
 		OPT_BOOLEAN('v', "version", &showVersion, "show version and exit", NULL, 0, 0),
 		OPT_STRING('l', "library", NULL, "library to link against", &linkLibCallback, 0, 0),
 		OPT_STRING('L', "libpath", NULL, "library search path", &libpathCallback, 0, 0),
+		OPT_BOOLEAN(0, "no-stdlib", &config.useStdLib, "do not link against the standard library", NULL, 0, 0),
 		OPT_HELP(),
 		OPT_END(),
 	};
@@ -104,49 +106,52 @@ int main(int argc, char const* argv[]) {
 		rlog("%s", infiles[i]);
 	}
 
-	for (int i = 0; config.libs[i] != NULL; i++) {
-		rlog("Linking against library: %s", config.libs[i]);
-	}
+	// for (int i = 0; config.libs[i] != NULL; i++) {
+	// 	rlog("Linking against library: %s", config.libs[i]);
+	// }
 
-	for (int i = 0; config.libpath[i] != NULL; i++) {
-		rlog("Library search path: %s", config.libpath[i]);
-	}
+	// for (int i = 0; config.libpath[i] != NULL; i++) {
+	// 	rlog("Library search path: %s", config.libpath[i]);
+	// }
 
 	// Validate that the linked libraries exists
 	// ...
 
 	// Plan to combine files:
-	// Have a global everything (global symbol table, global string table, global sections)
+	// Have a global everything
 	// Go through each input file
 	//   For each input file, read its sections and symbols
 	//   Add its components to the global ones, adjust addresses as necessary
 	//     Resolve relocations as necessary
 	//     Ensure no symbol conflicts
 	// Look up any library dependencies from the input files and check symbols
-	// Write final binary, injecting initialization code
+	// Write final binary
 
-	SymbolTable* globalSymTable = initSymbolTable();
-
-
+	GlobalTables globalTables;
+	globalTables.symbolTable = initSymbolTable();
+	globalTables.sectionTable = initSectionTable();
+	globalTables.relocTable = initRelocTable();
+	globalTables.stringTable = (char*) malloc(sizeof(char) * 64);
+	if (!globalTables.stringTable) emitError(ERR_MEM, "Failed to allocate memory for global string table");
 
 	for (int i = 0; infiles[i] != NULL; i++) {
 		const char* infile = infiles[i];
-		// merge();
-		
+		rlog("Merging input file: %s", infile);
+		merge(infile, &globalTables);
 	}
 
 	// All unresolved symbols at this point should be unresolved due to them being in dynamic libraries
 	// The dynamic library table will hold the libraries actually used and the symbols that "imported"
 
-	DyLibTable* dyLibTable = dynLibBuild(globalSymTable, config.libpath, config.libs);
-	showDyLibTable(dyLibTable);
+	// DyLibTable* dyLibTable = dynLibBuild(globalSymTable, config.libpath, config.libs);
+	// showDyLibTable(dyLibTable);
 	 
 
 
 
 
-	deinitSymbolTable(globalSymTable);
-	deinitDyLibTable(dyLibTable);
+	// deinitSymbolTable(globalSymTable);
+	// deinitDyLibTable(dyLibTable);
 	free(infiles);
 
 	return 0;

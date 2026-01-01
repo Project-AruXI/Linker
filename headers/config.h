@@ -1,6 +1,8 @@
 #ifndef _CONFIG_H
 #define _CONFIG_H
 
+#include <stdbool.h>
+
 // Maximum number of libraries that can be linked against
 //  since there is a "physical" limit to how many libraries can be loaded
 // For most use cases, 32 is plenty sufficient
@@ -13,6 +15,7 @@
 
 typedef struct Config {
 	const char* outfile;
+	bool useStdLib; // Whether to link against the standard library
 	char* libpath[MAX_LIBPATHS]; // The library search path
 	char* libs[MAX_LIBS]; // The list of libraries to link against
 } Config;
