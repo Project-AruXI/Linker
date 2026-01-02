@@ -52,7 +52,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 	AOEFFRelStrTab relStrTab;
 	relStrTab.rstStrs = (char*) (_obj + objHeader->hRelStrTabOff);
 	// uint32_t strTabSize = objHeader->hStrTabSize;
-	uint32_t relStrTabSize = objHeader->hRelStrTabSize;
+	// uint32_t relStrTabSize = objHeader->hRelStrTabSize;
 
 
 	FileCtx filectx = {
@@ -199,7 +199,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 	}
 
 
-	for (uint32_t i = 0; i < objHeader->hTRelTabSize-1; i++) {
+	for (uint32_t i = 0; i < objHeader->hTRelTabSize; i++) {
 		AOEFFTRelTab* trelTab = &tRelTables[i];
 		char* relTabName = &relStrTab.rstStrs[trelTab->relTabName];
 
@@ -215,12 +215,17 @@ void merge(const char* infile, GlobalTables* globalTables) {
 		// The indices refer to the local symbol tables
 		// Use the symbol names (from the local string table) to find the new indices in the global symbol table
 		for (uint32_t j = 0; j < trelTab->relCount; j++) {
-			AOEFFTRelEnt* relEnt = &trelTab->relEntries[j];
+			AOEFFTRelEnt* trueEntries = (AOEFFTRelEnt*) &trelTab->relEntries;
+			AOEFFTRelEnt* relEnt = &trueEntries[j];
 			uint32_t symbIndex = relEnt->reSymb; // The old symbol index
 			AOEFFSymEnt* localSymbEnt = &symbEntries[symbIndex];
 			char* localSymbName = &strTab.stStrs[localSymbEnt->seSymbName];
 			int globalSymbIndex = getSymbolByName(globalTables->symbolTable, localSymbName, startIndexOfSymbols);
-			if (globalSymbIndex == -1) emitError(ERR_INTERNAL, "Failed to find symbol %s in global symbol table while updating relocation entries", localSymbName);
+			if (globalSymbIndex == -1 && SE_GET_LOC(localSymbEnt->seSymbInfo) != SE_LOCAL) emitError(ERR_INTERNAL, "Failed to find symbol %s in global symbol table while updating relocation entries", localSymbName);
+			// Local symbols are not in the global symbol table but may still be referenced in relocation entries
+			// Relocation handling will only occur in one place, so to mark as such, set to -1 (aka leave as is)
+			// Highly doubt relocations really need symbol information for local symbols
+			// Big assumption!!
 
 			log("Updating relocation entry %d's symbol index from %d (local) to %d (global) for symbol %s", j, symbIndex, globalSymbIndex, localSymbName);
 			globalTables->relocTable->trelocs.tables[globalTables->relocTable->trelocs.count - 1].relEntries[j].reSymb = (uint8_t) globalSymbIndex;

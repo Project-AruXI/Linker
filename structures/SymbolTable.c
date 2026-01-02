@@ -76,15 +76,21 @@ uint32_t appendString(SymbolTable* symbTable, const char* str) {
 		symbTable->SymbolStringTable.strTab.stStrs = strs;
 	}
 
-	uint32_t index = symbTable->SymbolStringTable.strbCount;
-
 	char* dest = &strs[symbTable->SymbolStringTable.strbCount];
-	// dest should be the null terminator of the previous string
-	if (*dest != '\0') emitError(ERR_INTERNAL, "Symbol string table is corrupted (missing null terminator)");
-	dest++; // Begin copying after null
+
+	// When the string table is empty, the first string goes at the start
+	// Otherwise, it goes after the null terminator of the previous string
+	if (symbTable->SymbolStringTable.strbCount != 0) {
+		// dest should be the null terminator of the previous string
+		if (*dest != '\0') emitError(ERR_INTERNAL, "Symbol string table is corrupted (missing null terminator)");
+		dest++; // Begin copying after null
+	}
+	uint32_t index = symbTable->SymbolStringTable.strbCount;
 	strcpy(dest, str);
 	symbTable->SymbolStringTable.strbCount += len;
 	symbTable->SymbolStringTable.strCount += 1;
+
+	rlog("Appended string to symbol string table: %s (index %d)", str, index);
 
 	return index;
 }

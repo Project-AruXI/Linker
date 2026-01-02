@@ -51,10 +51,25 @@ void appendTRelocTable(RelocTable* relocTable, AOEFFTRelTab* treloc) {
 	// Make deep copies of the entries
 	relocTable->trelocs.tables[relocTable->trelocs.count].relEntries = (AOEFFTRelEnt*) malloc(sizeof(AOEFFTRelEnt) * treloc->relCount);
 	if (!relocTable->trelocs.tables[relocTable->trelocs.count].relEntries) emitError(ERR_MEM, "Failed to allocate memory for static relocation entries");
+
+	// TODO: Add this to the documentation since it is very important
+	// Due to how AOEFFTRelTab is defined, it uses a pointer for the entries
+	// This is used to store the data
+	// However, on disk, the pointer is not a true pointer but rather signifies an array of entries
+	// But when doing `treloc->relEntries`, it is treated as a pointer (aka it gets the pointer itself, not the data)
+	// So we need to cast it to the correct type to get the data
+	// The start of the data can be seen as where the pointer is located at
+	AOEFFTRelEnt* trueEntries = (AOEFFTRelEnt*) &treloc->relEntries;
+
 	for (uint32_t i = 0; i < treloc->relCount; i++) {
-		relocTable->trelocs.tables[relocTable->trelocs.count].relEntries[i] = treloc->relEntries[i];
+		relocTable->trelocs.tables[relocTable->trelocs.count].relEntries[i] = trueEntries[i];
 		// NOTE TO SELF: The reSymb field is the index into the symbol table, which very easily might become out of sync
 		// This will be updated after
+		trace("Copied relocation entry %d: off=0x%X, symb=%d, type=%d, addend=0x%X", i,
+		      trueEntries[i].reOff,
+		      trueEntries[i].reSymb,
+		      trueEntries[i].reType,
+		      trueEntries[i].reAddend);
 	}
 
 	relocTable->trelocs.count += 1;
@@ -64,7 +79,7 @@ void appendDRelocTable(RelocTable* relocTable, AOEFFDRelTab* dreloc) {
 }
 
 
-void appendRelocString(RelocTable* relocTable, const char* str) {
+uint32_t appendRelocString(RelocTable* relocTable, const char* str) {
 	char* strs = relocTable->RelocStringTable.strTab.rstStrs;
 
 	size_t len = strlen(str) + 1; // +1 for null terminator
