@@ -1,3 +1,5 @@
+.glob file1Fxn
+
 .text
 file1Fxn:
 	ld x10, =arr
