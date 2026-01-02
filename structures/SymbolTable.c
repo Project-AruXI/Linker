@@ -9,14 +9,14 @@ SymbolTable* initSymbolTable() {
 	SymbolTable* symbTable = (SymbolTable*) malloc(sizeof(SymbolTable));
 	if (!symbTable) emitError(ERR_MEM, "Failed to allocate memory for symbol table");
 
-	symbTable->symbols = (AOEFFSymbEntry*) malloc(10 * sizeof(AOEFFSymbEntry));
+	symbTable->symbols = (AOEFFSymEnt*) malloc(sizeof(AOEFFSymEnt) * 10);
 	if (!symbTable->symbols) emitError(ERR_MEM, "Failed to allocate memory for symbol table entries");
 
 	symbTable->count = 0;
 	symbTable->cap = 10;
 
 
-	uint32_t* unresolvedIndices = (uint32_t*) malloc(10 * sizeof(uint32_t));
+	uint32_t* unresolvedIndices = (uint32_t*) malloc(sizeof(uint32_t) * 10);
 	if (!unresolvedIndices) emitError(ERR_MEM, "Failed to allocate memory for unresolved symbol indices");
 
 	symbTable->unresolved.unresolvedIndices = unresolvedIndices;
@@ -24,7 +24,7 @@ SymbolTable* initSymbolTable() {
 	symbTable->unresolved.cap = 10;
 
 
-	char* strTabData = (char*) malloc(50 * sizeof(char));
+	char* strTabData = (char*) malloc(sizeof(char) * 50);
 	if (!strTabData) emitError(ERR_MEM, "Failed to allocate memory for symbol string table");
 
 	symbTable->SymbolStringTable.strTab.stStrs = strTabData;
@@ -42,26 +42,41 @@ void deinitSymbolTable(SymbolTable* symbTable) {
 	free(symbTable);
 }
 
-void appendSymbol(SymbolTable* symbTable, AOEFFSymbEntry symb) {
+void appendSymbol(SymbolTable* symbTable, AOEFFSymEnt symb) {
 	if (symbTable->count >= symbTable->cap) {
 		symbTable->cap *= 2;
-		symbTable->symbols = (AOEFFSymbEntry*) realloc(symbTable->symbols, symbTable->cap * sizeof(AOEFFSymbEntry));
+		symbTable->symbols = (AOEFFSymEnt*) realloc(symbTable->symbols, sizeof(AOEFFSymEnt) * symbTable->cap);
 		if (!symbTable->symbols) emitError(ERR_MEM, "Failed to reallocate memory for symbol table entries");
 	}
 	symbTable->symbols[symbTable->count++] = symb;
 }
 
-void appendString(SymbolTable* symbTable, const char* str) {
+int getSymbolByName(SymbolTable* symbTable, const char* name, int startIndex) {
+	for (uint32_t i = startIndex; i < symbTable->count; i++) {
+		AOEFFSymEnt* symbEnt = &symbTable->symbols[i];
+		char* symbName = &symbTable->SymbolStringTable.strTab.stStrs[symbEnt->seSymbName];
+
+		if (strcmp(symbName, name) == 0) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+uint32_t appendString(SymbolTable* symbTable, const char* str) {
 	char* strs = symbTable->SymbolStringTable.strTab.stStrs;
 
 	size_t len = strlen(str) + 1; // +1 for null terminator
 	if (symbTable->SymbolStringTable.strbCount + len == symbTable->SymbolStringTable.strbCap) {
 		symbTable->SymbolStringTable.strbCap *= 2;
 
-		strs = (char*) realloc(strs, symbTable->SymbolStringTable.strbCap * sizeof(char));
+		strs = (char*) realloc(strs,  sizeof(char) * symbTable->SymbolStringTable.strbCap);
 		if (!strs) emitError(ERR_MEM, "Failed to reallocate memory for symbol string table");
 		symbTable->SymbolStringTable.strTab.stStrs = strs;
 	}
+
+	uint32_t index = symbTable->SymbolStringTable.strbCount;
 
 	char* dest = &strs[symbTable->SymbolStringTable.strbCount];
 	// dest should be the null terminator of the previous string
@@ -70,4 +85,6 @@ void appendString(SymbolTable* symbTable, const char* str) {
 	strcpy(dest, str);
 	symbTable->SymbolStringTable.strbCount += len;
 	symbTable->SymbolStringTable.strCount += 1;
+
+	return index;
 }

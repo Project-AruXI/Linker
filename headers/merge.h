@@ -9,7 +9,6 @@ typedef struct GlobalTables {
 	SectionTable* sectionTable;
 	SymbolTable* symbolTable;
 	RelocTable* relocTable;
-	char* stringTable;
 } GlobalTables;
 
 void merge(const char* infile, GlobalTables* globalTables);

@@ -51,10 +51,9 @@ void merge(const char* infile, GlobalTables* globalTables) {
 	AOEFFTRelTab* tRelTables = (AOEFFTRelTab*) (_obj + objHeader->hTRelTabOff);
 	AOEFFRelStrTab relStrTab;
 	relStrTab.rstStrs = (char*) (_obj + objHeader->hRelStrTabOff);
-	uint32_t strTabSize = objHeader->hStrTabSize;
+	// uint32_t strTabSize = objHeader->hStrTabSize;
 	uint32_t relStrTabSize = objHeader->hRelStrTabSize;
 
-	// SectionTable* localSectTable = initSectionTable();
 
 	FileCtx filectx = {
 		.filename = strdup(infile),
@@ -173,19 +172,58 @@ void merge(const char* infile, GlobalTables* globalTables) {
 	addFileContext(globalTables->sectionTable, filectx);
 
 	// Add symbols to global symbol table
+	// For now, skip non-global symbols
+	// Also add strings to global string table
+
+	// Relocation entries reference symbol indices, so we need to update those as well after adding symbols
+	
+	// Get the start index of the newly added symbols to aid with updating relocation entries
+	// Specially, indicate where to start searching the symbol table in order to decrease search time
+	int startIndexOfSymbols = globalTables->symbolTable->count;
+
 	for (uint32_t i = 0; i < objHeader->hSymbSize-1; i++) {
 		AOEFFSymEnt* symbEnt = &symbEntries[i];
+		char* symName = &strTab.stStrs[symbEnt->seSymbName];
 
-		// char* symName = &strTab.stStrs[symbEnt->seSymbName];
-		char* symName = strTab.stStrs + symbEnt->seSymbName;
+		if (SE_GET_LOC(symbEnt->seSymbInfo) != SE_GLOBL) {
+			log("Skipping non-global symbol %d (%s)", i, symName);
+			continue;
+		}
+
 
 		log("Symbol %d: nameIdx=%d (%s), size=0x%X, val=0x%X, info=0x%X, sect=%d", i, symbEnt->seSymbName, symName, symbEnt->seSymbSize, symbEnt->seSymbVal, symbEnt->seSymbInfo, symbEnt->seSymbSect);
 		appendSymbol(globalTables->symbolTable, *symbEnt);
+		uint32_t newIndex = appendString(globalTables->symbolTable, symName);
+		// Update the symbol entry's name index to the new index in the global string table
+		globalTables->symbolTable->symbols[globalTables->symbolTable->count - 1].seSymbName = newIndex;
 	}
 
 
+	for (uint32_t i = 0; i < objHeader->hTRelTabSize-1; i++) {
+		AOEFFTRelTab* trelTab = &tRelTables[i];
+		char* relTabName = &relStrTab.rstStrs[trelTab->relTabName];
+
+		log("Relocation Table %d: sect=%d, nameIdx=%d (%s), entryCount=%d", i, trelTab->relSect, trelTab->relTabName, relTabName, trelTab->relCount);
+
+		appendTRelocTable(globalTables->relocTable, trelTab);
+		uint32_t newIndex = appendRelocString(globalTables->relocTable, relTabName);
+		// Update the relocation table's name index to the new index in the global relocation string table
+		globalTables->relocTable->trelocs.tables[globalTables->relocTable->trelocs.count - 1].relTabName = newIndex;
 
 
+		// Reference to the comment earlier about symbol indices potentially being out of sync
+		// The indices refer to the local symbol tables
+		// Use the symbol names (from the local string table) to find the new indices in the global symbol table
+		for (uint32_t j = 0; j < trelTab->relCount; j++) {
+			AOEFFTRelEnt* relEnt = &trelTab->relEntries[j];
+			uint32_t symbIndex = relEnt->reSymb; // The old symbol index
+			AOEFFSymEnt* localSymbEnt = &symbEntries[symbIndex];
+			char* localSymbName = &strTab.stStrs[localSymbEnt->seSymbName];
+			int globalSymbIndex = getSymbolByName(globalTables->symbolTable, localSymbName, startIndexOfSymbols);
+			if (globalSymbIndex == -1) emitError(ERR_INTERNAL, "Failed to find symbol %s in global symbol table while updating relocation entries", localSymbName);
 
-
+			log("Updating relocation entry %d's symbol index from %d (local) to %d (global) for symbol %s", j, symbIndex, globalSymbIndex, localSymbName);
+			globalTables->relocTable->trelocs.tables[globalTables->relocTable->trelocs.count - 1].relEntries[j].reSymb = (uint8_t) globalSymbIndex;
+		}
+	}
 }

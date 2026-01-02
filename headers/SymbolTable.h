@@ -10,7 +10,7 @@
  * A wrapper around the AOEFF symbol table structure and the string table.
  */
 typedef struct SymbolTable {
-	AOEFFSymbEntry* symbols;
+	AOEFFSymEnt* symbols;
 	uint32_t count;
 	uint32_t cap;
 
@@ -34,16 +34,20 @@ typedef struct SymbolTable {
 SymbolTable* initSymbolTable();
 void deinitSymbolTable(SymbolTable* symbTable);
 
-void appendSymbol(SymbolTable* symbTable, AOEFFSymbEntry symb);
+void appendSymbol(SymbolTable* symbTable, AOEFFSymEnt symb);
 
+
+int getSymbolByName(SymbolTable* symbTable, const char* name, int startIndex);
 
 /* For the embedded string table */
 
 /**
  * Appends a string to the symbol table's string table. Note that this maintains the null-terminator of the previous string.
+ * Returns the index of the newly appended string in the string table for the symbol entry's seSymbName field.
  * @param symbTable The symbol table containing the string table
  * @param str The string to append
+ * @return The index of the newly appended string in the string table
  */
-void appendString(SymbolTable* symbTable, const char* str);
+uint32_t appendString(SymbolTable* symbTable, const char* str);
 
 #endif

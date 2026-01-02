@@ -51,7 +51,7 @@ void appendSection(SectionTable* sectTable, AOEFFSectHdr* sectHdr, void* section
 
 void addFileContext(SectionTable* sectTable, FileCtx filectx);
 
-void concatData(SectionTable* dest, SectionTable* src);
-void concatText(SectionTable* dest, SectionTable* src);
+// void concatData(SectionTable* dest, SectionTable* src);
+// void concatText(SectionTable* dest, SectionTable* src);
 
 #endif
