@@ -39,6 +39,8 @@ void appendSymbol(SymbolTable* symbTable, AOEFFSymEnt symb);
 
 int getSymbolByName(SymbolTable* symbTable, const char* name, int startIndex);
 
+void displaySymbolTable(SymbolTable* symbTable);
+
 /* For the embedded string table */
 
 /**

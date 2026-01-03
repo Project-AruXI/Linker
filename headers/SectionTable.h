@@ -54,4 +54,6 @@ void addFileContext(SectionTable* sectTable, FileCtx filectx);
 // void concatData(SectionTable* dest, SectionTable* src);
 // void concatText(SectionTable* dest, SectionTable* src);
 
+void displaySectionTable(SectionTable* sectTable);
+
 #endif

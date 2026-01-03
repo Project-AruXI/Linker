@@ -36,6 +36,8 @@ void deinitRelocTable(RelocTable* relocTable);
 void appendTRelocTable(RelocTable* relocTable, AOEFFTRelTab* treloc);
 void appendDRelocTable(RelocTable* relocTable, AOEFFDRelTab* dreloc);
 
+void displayRelocTable(RelocTable* relocTable);
+
 /* For the embedded relocation string table */
 
 /**

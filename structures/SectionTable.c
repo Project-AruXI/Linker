@@ -40,3 +40,50 @@ void addFileContext(SectionTable* sectTable, FileCtx filectx) {
 	}
 	sectTable->filectxs.ctx[sectTable->filectxs.count++] = filectx;
 }
+
+void displaySectionTable(SectionTable* sectTable) {
+	/**
+	 * Display as:
+	 * ===== Section Table =====
+	 * Total sections: x
+	 * --------------------------
+	 * # |   Name   |  Offset  |  Size  |
+	 * ------------------------------------
+	 * x |  xxxx    | 0xXXXXXX | 0xXXXX |
+	 * ------------------------------------
+	 * ...
+	 * ------------------------------------
+	 * 
+	 * File Contexts:
+	 * Total file contexts: x
+	 * ------------------------------------
+	 * # |   Filename    | Text Offset | Data Offset | Const Offset |
+	 * ---------------------------------------------------------------
+	 * x |   xxxxxxx     |   0xXXXX    |	 0xXXXX    |    0xXXXX     |
+	 * ---------------------------------------------------------------
+	 * ...
+	 * ---------------------------------------------------------------
+	 */
+
+	rtrace("====== Section Table ======");
+	rtrace("Total sections: %d", sectTable->count);
+	rtrace("-----------------------------------");
+	rtrace(" # |  Name  |  Offset  |  Size  |");
+	rtrace("-----------------------------------");
+	for (uint32_t i = 0; i < sectTable->count; i++) {
+		AOEFFSectHdr* sectHdr = &sectTable->sections[i];
+		rtrace("%2d | %.8s | 0x%06X | 0x%06X |", i, sectHdr->shSectName, sectHdr->shSectOff, sectHdr->shSectSize);
+	}
+	rtrace("-----------------------------------\n");
+	rtrace("---- File Contexts ----");
+	rtrace("Total file contexts: %d", sectTable->filectxs.count);
+	rtrace("---------------------------------------------------------------");
+	rtrace(" # |   Filename    | Text Offset | Data Offset | Const Offset |");
+	rtrace("---------------------------------------------------------------");
+	for (uint32_t i = 0; i < sectTable->filectxs.count; i++) {
+		FileCtx* filectx = &sectTable->filectxs.ctx[i];
+		rtrace("%2d | %-13s |  0x%04X  |  0x%04X  |  0x%04X  |", i, filectx->filename, 
+				filectx->textOffset, filectx->dataOffset, filectx->constOffset);
+	}	
+	rtrace("---------------------------------------------------------------");
+}

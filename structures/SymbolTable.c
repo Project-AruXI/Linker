@@ -64,6 +64,67 @@ int getSymbolByName(SymbolTable* symbTable, const char* name, int startIndex) {
 	return -1;
 }
 
+void displaySymbolTable(SymbolTable* symbTable) {
+	/**
+	 * Display as:
+	 * ===== Symbol Table =====
+	 * Total symbols: x
+	 * -----------------------
+	 * # | Name Index | Name | Size | Value | Info (Type,Locality) | Section
+	 * ---------------------------------------------------------------------
+	 * x |		 x      | xxx  | 0xX  | 0xX   |   (X, X)           |   X
+	 * ---------------------------------------------------------------------
+	 * ...
+	 */
+
+	char* typeStr = NULL;
+	char* locStr = NULL;
+
+	rtrace("====== Symbol Table ======");
+	rtrace("Total symbols: %d", symbTable->count);
+	rtrace("--------------------------");
+	rtrace(" # | Name Index |    Name    |  Size  | Value  | (Type,Locality) | Section |");
+	rtrace("----------------------------------------------------------------------------");
+	for (uint32_t i = 0; i < symbTable->count; i++) {
+		AOEFFSymEnt* symbEnt = &symbTable->symbols[i];
+	
+		switch (SE_GET_LOC(symbEnt->seSymbInfo)) {
+			case SE_LOCAL:
+				locStr = "LOCAL";
+				break;
+			case SE_GLOBL:
+				locStr = "GLOBL";
+				break;
+			default:
+				locStr = "UNKWN";
+				break;
+		}
+
+		switch (SE_GET_TYPE(symbEnt->seSymbInfo)) {
+			case SE_NONE_T:
+				typeStr = "NONE";
+				break;
+			case SE_ABSV_T:
+				typeStr = "ABSV";
+				break;
+			case SE_FUNC_T:
+				typeStr = "FUNC";
+				break;
+			case SE_OBJ_T:
+				typeStr = "OBJ";
+				break;
+			default:
+				typeStr = "UNKWN";
+				break;
+		}
+
+		char* symbName = &symbTable->SymbolStringTable.strTab.stStrs[symbEnt->seSymbName];
+		rtrace("%2d | %10d | %10s | 0x%04X | 0x%04X |  (%s, %s)  |   %2d    |", i, symbEnt->seSymbName, symbName, 
+				symbEnt->seSymbSize, symbEnt->seSymbVal, typeStr, locStr, symbEnt->seSymbSect);
+		rtrace("----------------------------------------------------------------------------");
+	}
+}
+
 uint32_t appendString(SymbolTable* symbTable, const char* str) {
 	char* strs = symbTable->SymbolStringTable.strTab.stStrs;
 
@@ -80,10 +141,10 @@ uint32_t appendString(SymbolTable* symbTable, const char* str) {
 
 	// When the string table is empty, the first string goes at the start
 	// Otherwise, it goes after the null terminator of the previous string
-	if (symbTable->SymbolStringTable.strbCount != 0) {
+	if (symbTable->SymbolStringTable.strCount != 0) {
 		// dest should be the null terminator of the previous string
 		if (*dest != '\0') emitError(ERR_INTERNAL, "Symbol string table is corrupted (missing null terminator)");
-		dest++; // Begin copying after null
+		// dest++; // Begin copying after null
 	}
 	uint32_t index = symbTable->SymbolStringTable.strbCount;
 	strcpy(dest, str);

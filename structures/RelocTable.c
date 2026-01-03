@@ -78,6 +78,93 @@ void appendDRelocTable(RelocTable* relocTable, AOEFFDRelTab* dreloc) {
 
 }
 
+void displayRelocTable(RelocTable* relocTable) {
+	char* typeStr = NULL;
+
+	rtrace("====== Relocation Tables ======");
+
+	rtrace("-- Static Relocation Tables --");
+	rtrace("Total Tables: %d", relocTable->trelocs.count);
+	for (int i = 0; i < relocTable->trelocs.count; i++) {
+		AOEFFTRelTab* table = &relocTable->trelocs.tables[i];
+
+		char* relTabName = &relocTable->RelocStringTable.strTab.rstStrs[table->relTabName];
+
+		rtrace("---------------- Table %d -----------------", i);
+		rtrace("Section: %d | Name Index: %d | Name: %s | Entry Count: %d", table->relSect, table->relTabName, relTabName, table->relCount);
+		rtrace("------------------------------------------");
+		rtrace(" Num |  Offset  | Symbol | Type | Addend |");
+		rtrace("------------------------------------------");
+		for (uint32_t j = 0; j < table->relCount; j++) {
+			AOEFFTRelEnt* entry = &table->relEntries[j];
+
+			switch (entry->reType) {
+				case RE_ARU32_ABS14:
+					typeStr = "ABS14";
+					break;
+				case RE_ARU32_MEM9:
+					typeStr = "MEM9";
+					break;
+				case RE_ARU32_IR24:
+					typeStr = "IR24";
+					break;
+				case RE_ARU32_IR19:
+					typeStr = "IR19";
+					break;
+				case RE_ARU32_DECOMP:
+					typeStr = "DECOMP";
+					break;
+				default:
+					typeStr = "UNKNOWN";
+					break;
+			}
+
+			rtrace("%4d | 0x%06X |  %5d | %4s | 0x%04X |", j, entry->reOff, entry->reSymb, typeStr, entry->reAddend);
+		}
+		rtrace("------------------------------------------\n");
+	}
+
+	rtrace("-- Dynamic Relocation Tables --");
+	rtrace("Total Tables: %d", relocTable->drelocs.count);
+	for (int i = 0; i < relocTable->drelocs.count; i++) {
+		AOEFFDRelTab* table = &relocTable->drelocs.tables[i];
+
+		char* relTabName = &relocTable->RelocStringTable.strTab.rstStrs[table->relTabName];
+
+		rtrace("---------------- Table %d -----------------", i);
+		rtrace("Section: %d | Name Index: %d | Name: %s | Entry Count: %d", table->relSect, table->relTabName, relTabName, table->relCount);
+		rtrace("------------------------------------------");
+		rtrace(" Num |  Offset  | Symbol | Type | Addend |");
+		rtrace("------------------------------------------");
+		for (uint32_t j = 0; j < table->relCount; j++) {
+			AOEFFDRelEnt* entry = &table->relEntries[j];
+
+			switch (entry->reType) {
+				case RE_ARU32_ABS14:
+					typeStr = "ABS14";
+					break;
+				case RE_ARU32_MEM9:
+					typeStr = "MEM9";
+					break;
+				case RE_ARU32_IR24:
+					typeStr = "IR24";
+					break;
+				case RE_ARU32_IR19:
+					typeStr = "IR19";
+					break;
+				case RE_ARU32_DECOMP:
+					typeStr = "DECOMP";
+					break;
+				default:
+					typeStr = "UNKNOWN";
+					break;
+			}
+
+			rtrace("%4d | 0x%06X |  %5d | %4s | 0x%04X |", j, entry->reOff, entry->reSymb, typeStr, entry->reAddend);
+		}
+		rtrace("------------------------------------------");
+	}
+}
 
 uint32_t appendRelocString(RelocTable* relocTable, const char* str) {
 	char* strs = relocTable->RelocStringTable.strTab.rstStrs;
@@ -91,15 +178,21 @@ uint32_t appendRelocString(RelocTable* relocTable, const char* str) {
 		relocTable->RelocStringTable.strTab.rstStrs = strs;
 	}
 
-	uint32_t index = relocTable->RelocStringTable.strbCount;
-
 	char* dest = &strs[relocTable->RelocStringTable.strbCount];
-	// dest should be the null terminator of the previous string
-	if (*dest != '\0') emitError(ERR_INTERNAL, "Relocation string table is corrupted (missing null terminator)");
-	dest++; // Begin copying after null
+	
+	// When the string table is empty, the first string goes at the start
+	// Otherwise, it goes after the null terminator of the previous string
+	if (relocTable->RelocStringTable.strCount != 0) {
+		// dest should be the null terminator of the previous string
+		if (*dest != '\0') emitError(ERR_INTERNAL, "Relocation string table is corrupted (missing null terminator)");
+		// dest++; // Begin copying after null
+	}
+	uint32_t index = relocTable->RelocStringTable.strbCount;
 	strcpy(dest, str);
 	relocTable->RelocStringTable.strbCount += len;
 	relocTable->RelocStringTable.strCount += 1;
+
+	rlog("Appended string to relocation string table: %s (index %d)", str, index);
 
 	return index;
 }
