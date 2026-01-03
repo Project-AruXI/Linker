@@ -8,7 +8,7 @@ HEADERS = ./headers
 
 INCLUDES = -I$(HEADERS) -I$(COMMON)
 
-SRCS = linker.c $(COMP)/merge.c $(COMP)/diagnostics.c $(COMP)/dylink.c \
+SRCS = linker.c $(COMP)/merge.c $(COMP)/diagnostics.c $(COMP)/dylink.c $(COMP)/relocate.c \
 	$(STRUCTS)/DyLibTable.c $(STRUCTS)/SymbolTable.c $(STRUCTS)/SectionTable.c $(STRUCTS)/RelocTable.c
 LIBS = $(COMMON)/libargparse.a $(COMMON)/libsds.a
 TARGET = $(OUT)/arxlnk

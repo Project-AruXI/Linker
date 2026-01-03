@@ -1,6 +1,7 @@
 .glob file1Fxn
 
 .text
+	nop
 file1Fxn:
 	ld x10, =arr
 	ld x1, [x10, #0x1] % Get second element (0x2)
