@@ -70,33 +70,37 @@ void merge(const char* infile, GlobalTables* globalTables) {
 		uint32_t sectionOffset = sectHdr->shSectOff;
 		uint32_t sectionSize = sectHdr->shSectSize;
 
+		uint32_t prevSizeSect = 0; // The previous size of the global section being merged into
+
 		// TODO: Refactor to be cleaner
 		if (sectHdr->shSectName[1] == 't') { // .text
 			uint32_t* aobjText = (uint32_t*) ((uint8_t*) _obj + sectionOffset);
 			uint32_t aobjTextSize = sectionSize;
 
+			prevSizeSect = globalTables->sectionTable->sections[3].shSectSize;
+
 			appendSection(globalTables->sectionTable, sectHdr, aobjText);
 
 			// As per the comment, the size of the global text section is the last file context's textOffset + size of the section from section header
 			uint32_t prevFilectxTextOffset = 0;
-			if (globalTables->sectionTable->filectxs.count > 0) {
+			if (globalTables->sectionTable->filectxs.count != 0) {
 				FileCtx* prevFilectx = &globalTables->sectionTable->filectxs.ctx[globalTables->sectionTable->filectxs.count - 1];
 				prevFilectxTextOffset = prevFilectx->textOffset;
 			}
 			log("Previous file context text offset: 0x%X", prevFilectxTextOffset);
-			uint32_t globalTextSize = prevFilectxTextOffset + sectHdr->shSectSize;
+			uint32_t newGlobalTextSize = prevFilectxTextOffset + sectHdr->shSectSize;
 			// The new file context's text offset is the previous global text size
-			filectx.textOffset = globalTextSize;
+			filectx.textOffset = prevSizeSect;
 			log("Updated file context text offset to 0x%X", filectx.textOffset);
 
 			uint32_t* newGlobalText = NULL;
 			if (!globalTables->sectionTable->_text) {
 				trace("Allocating global text section for the first time");
 				// First allocation
-				newGlobalText = (uint32_t*) malloc(globalTextSize);
+				newGlobalText = (uint32_t*) malloc(newGlobalTextSize);
 				if (!newGlobalText) emitError(ERR_MEM, "Failed to allocate memory for global text section");
 			} else {
-				newGlobalText = (uint32_t*) realloc(globalTables->sectionTable->_text, globalTextSize);
+				newGlobalText = (uint32_t*) realloc(globalTables->sectionTable->_text, newGlobalTextSize);
 				if (!newGlobalText) emitError(ERR_MEM, "Failed to reallocate memory for global text section");
 			}
 			globalTables->sectionTable->_text = newGlobalText;
@@ -106,28 +110,30 @@ void merge(const char* infile, GlobalTables* globalTables) {
 			uint8_t* aobjData = (uint8_t*) _obj + sectionOffset;
 			uint32_t aobjDataSize = sectionSize;
 
+			prevSizeSect = globalTables->sectionTable->sections[0].shSectSize;
+
 			appendSection(globalTables->sectionTable, sectHdr, aobjData);
 
 			// As per the comment, the size of the global data section is the last file context's dataOffset + size of the section from section header
 			uint32_t prevFilectxDataOffset = 0;
-			if (globalTables->sectionTable->filectxs.count > 0) {
+			if (globalTables->sectionTable->filectxs.count != 0) {
 				FileCtx* prevFilectx = &globalTables->sectionTable->filectxs.ctx[globalTables->sectionTable->filectxs.count - 1];
 				prevFilectxDataOffset = prevFilectx->dataOffset;
 			}
 			log("Previous file context data offset: 0x%X", prevFilectxDataOffset);
-			uint32_t globalDataSize = prevFilectxDataOffset + sectHdr->shSectSize;
+			uint32_t newGlobalDataSize = prevFilectxDataOffset + sectHdr->shSectSize;
 			// The new file context's data offset is the previous global data size
-			filectx.dataOffset = globalDataSize;
+			filectx.dataOffset = prevSizeSect;
 			log("Updated file context data offset to 0x%X", filectx.dataOffset);
 
 			uint8_t* newGlobalData = NULL;
 			if (!globalTables->sectionTable->_data) {
 				trace("Allocating global data section for the first time");
 				// First allocation
-				newGlobalData = (uint8_t*) malloc(globalDataSize);
+				newGlobalData = (uint8_t*) malloc(newGlobalDataSize);
 				if (!newGlobalData) emitError(ERR_MEM, "Failed to allocate memory for global data section");
 			} else {
-				newGlobalData = (uint8_t*) realloc(globalTables->sectionTable->_data, globalDataSize);
+				newGlobalData = (uint8_t*) realloc(globalTables->sectionTable->_data, newGlobalDataSize);
 				if (!newGlobalData) emitError(ERR_MEM, "Failed to reallocate memory for global data section");
 			}
 			globalTables->sectionTable->_data = newGlobalData;
@@ -137,28 +143,30 @@ void merge(const char* infile, GlobalTables* globalTables) {
 			uint8_t* aobjConst = (uint8_t*) _obj + sectionOffset;
 			uint32_t aobjConstSize = sectionSize;
 
+			prevSizeSect = globalTables->sectionTable->sections[1].shSectSize;
+
 			appendSection(globalTables->sectionTable, sectHdr, aobjConst);
 
 			// As per the comment, the size of the global const section is the last file context's constOffset + size of the section from section header
 			uint32_t prevFilectxConstOffset = 0;
-			if (globalTables->sectionTable->filectxs.count > 0) {
+			if (globalTables->sectionTable->filectxs.count != 0) {
 				FileCtx* prevFilectx = &globalTables->sectionTable->filectxs.ctx[globalTables->sectionTable->filectxs.count - 1];
 				prevFilectxConstOffset = prevFilectx->constOffset;
 			}
 			log("Previous file context const offset: 0x%X", prevFilectxConstOffset);
-			uint32_t globalConstSize = prevFilectxConstOffset + sectHdr->shSectSize;
+			uint32_t newGlobalConstSize = prevFilectxConstOffset + sectHdr->shSectSize;
 			// The new file context's const offset is the previous global const size
-			filectx.constOffset = globalConstSize;
+			filectx.constOffset = prevSizeSect;
 			log("Updated file context const offset to 0x%X", filectx.constOffset);
 
 			uint8_t* newGlobalConst = NULL;
 			if (!globalTables->sectionTable->_const) {
 				trace("Allocating global const section for the first time");
 				// First allocation
-				newGlobalConst = (uint8_t*) malloc(globalConstSize);
+				newGlobalConst = (uint8_t*) malloc(newGlobalConstSize);
 				if (!newGlobalConst) emitError(ERR_MEM, "Failed to allocate memory for global const section");
 			} else {
-				newGlobalConst = (uint8_t*) realloc(globalTables->sectionTable->_const, globalConstSize);
+				newGlobalConst = (uint8_t*) realloc(globalTables->sectionTable->_const, newGlobalConstSize);
 				if (!newGlobalConst) emitError(ERR_MEM, "Failed to reallocate memory for global const section");
 			}
 			globalTables->sectionTable->_const = newGlobalConst;
@@ -189,6 +197,8 @@ void merge(const char* infile, GlobalTables* globalTables) {
 			log("Skipping non-global symbol %d (%s)", i, symName);
 			continue;
 		}
+
+		int filectxIndex = globalTables->sectionTable->filectxs.count - 1;
 
 		// If the symbol already exists:
 		// - One could be an external, the other defined
@@ -222,6 +232,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 					existingSymEntry->seSymbSect = symbEnt->seSymbSect;
 					existingSymEntry->seSymbVal = symbEnt->seSymbVal;
 					existingSymEntry->seSymbSize = symbEnt->seSymbSize;
+					globalTables->symbolTable->filectxIndices[symbIndexInGlobal] = filectxIndex;
 					continue;
 				} else {
 					trace("New symbol %s is also external", symName);
@@ -247,12 +258,32 @@ void merge(const char* infile, GlobalTables* globalTables) {
 
 
 		log("Symbol %d: nameIdx=%d (%s), size=0x%X, val=0x%X, info=0x%X, sect=%d", i, symbEnt->seSymbName, symName, symbEnt->seSymbSize, symbEnt->seSymbVal, symbEnt->seSymbInfo, symbEnt->seSymbSect);
-		appendSymbol(globalTables->symbolTable, *symbEnt);
+		AOEFFSymEnt* addedSymbol = appendSymbol(globalTables->symbolTable, *symbEnt); 
 		uint32_t newIndex = appendString(globalTables->symbolTable, symName);
 		// Update the symbol entry's name index to the new index in the global string table
-		globalTables->symbolTable->symbols[globalTables->symbolTable->count - 1].seSymbName = newIndex;
-	}
+		addedSymbol->seSymbName = newIndex;
 
+		// In the case that the symbol is an address in a section, we need to update the symbol's value
+		// The old value is just an offset in the (local) section
+		// The new value is the global section's offset + the old value
+		if (SE_GET_TYPE(addedSymbol->seSymbInfo) != SE_NONE_T && addedSymbol->seSymbSect != SE_SECT_UNDEF) {
+			// Get the section's global offset
+			uint32_t sectionGlobalOffset = 0;
+			if (addedSymbol->seSymbSect == 3) sectionGlobalOffset = filectx.textOffset;
+			else if (addedSymbol->seSymbSect == 0) sectionGlobalOffset = filectx.dataOffset;
+			else if (addedSymbol->seSymbSect == 1) sectionGlobalOffset = filectx.constOffset;
+			else emitError(ERR_INTERNAL, "Unsupported section index %d for symbol %s while updating symbol value", addedSymbol->seSymbSect, symName);
+
+			log("Updating symbol %s's value from 0x%X to 0x%X", symName, addedSymbol->seSymbVal, sectionGlobalOffset + addedSymbol->seSymbVal);
+			addedSymbol->seSymbVal = sectionGlobalOffset + addedSymbol->seSymbVal;
+
+			globalTables->symbolTable->filectxIndices[globalTables->symbolTable->count - 1] = filectxIndex;
+		} else {
+			// Take the chance that at this point, the symbol is external
+			// Meaning it has no "file context"
+			globalTables->symbolTable->filectxIndices[globalTables->symbolTable->count - 1] = -1;
+		}
+	}
 
 	for (uint32_t i = 0; i < objHeader->hTRelTabSize; i++) {
 		AOEFFTRelTab* trelTab = &tRelTables[i];
@@ -260,7 +291,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 
 		log("Relocation Table %d: sect=%d, nameIdx=%d (%s), entryCount=%d", i, trelTab->relSect, trelTab->relTabName, relTabName, trelTab->relCount);
 
-		appendTRelocTable(globalTables->relocTable, trelTab);
+		appendTRelocTable(globalTables->relocTable, trelTab, globalTables->sectionTable->filectxs.count - 1);
 		uint32_t newIndex = appendRelocString(globalTables->relocTable, relTabName);
 		// Update the relocation table's name index to the new index in the global relocation string table
 		globalTables->relocTable->trelocs.tables[globalTables->relocTable->trelocs.count - 1].relTabName = newIndex;

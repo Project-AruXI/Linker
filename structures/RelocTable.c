@@ -15,11 +15,18 @@ RelocTable* initRelocTable() {
 	relocTable->trelocs.count = 0;
 	relocTable->trelocs.cap = 10;
 
+	relocTable->trelocs.filectxIndices = (int*) malloc(sizeof(int) * 10);
+	if (!relocTable->trelocs.filectxIndices) emitError(ERR_MEM, "Failed to allocate memory for static relocation table file context indices");
+
+
 	relocTable->drelocs.tables = (AOEFFDRelTab*) malloc(sizeof(AOEFFDRelTab) * 10);
 	if (!relocTable->drelocs.tables) emitError(ERR_MEM, "Failed to allocate memory for dynamic relocation tables");
 
 	relocTable->drelocs.count = 0;
 	relocTable->drelocs.cap = 10;
+
+	relocTable->drelocs.filectxIndices = (int*) malloc(sizeof(int) * 10);
+	if (!relocTable->drelocs.filectxIndices) emitError(ERR_MEM, "Failed to allocate memory for dynamic relocation table file context indices");
 
 
 	char* relStrTabData = (char*) malloc(sizeof(char) * 50);
@@ -36,17 +43,23 @@ RelocTable* initRelocTable() {
 void deinitRelocTable(RelocTable* relocTable) {
 }
 
-void appendTRelocTable(RelocTable* relocTable, AOEFFTRelTab* treloc) {
+void appendTRelocTable(RelocTable* relocTable, AOEFFTRelTab* treloc, int filectxIndex) {
 	if (relocTable->trelocs.count == relocTable->trelocs.cap) {
 		relocTable->trelocs.cap *= 2;
 		AOEFFTRelTab* newTables = (AOEFFTRelTab*) realloc(relocTable->trelocs.tables, sizeof(AOEFFTRelTab) * relocTable->trelocs.cap);
 		if (!newTables) emitError(ERR_MEM, "Failed to reallocate memory for static relocation tables");
+
+		int* newFilectxIndices = (int*) realloc(relocTable->trelocs.filectxIndices, sizeof(int) * relocTable->trelocs.cap);
+		if (!newFilectxIndices) emitError(ERR_MEM, "Failed to reallocate memory for static relocation table file context indices");
+
 		relocTable->trelocs.tables = newTables;
+		relocTable->trelocs.filectxIndices = newFilectxIndices;
 	}
 
 	relocTable->trelocs.tables[relocTable->trelocs.count].relCount = treloc->relCount;
 	relocTable->trelocs.tables[relocTable->trelocs.count].relSect = treloc->relSect;
 	relocTable->trelocs.tables[relocTable->trelocs.count].relTabName = treloc->relTabName;
+	relocTable->trelocs.filectxIndices[relocTable->trelocs.count] = filectxIndex;
 
 	// Make deep copies of the entries
 	relocTable->trelocs.tables[relocTable->trelocs.count].relEntries = (AOEFFTRelEnt*) malloc(sizeof(AOEFFTRelEnt) * treloc->relCount);
@@ -91,7 +104,7 @@ void displayRelocTable(RelocTable* relocTable) {
 		char* relTabName = &relocTable->RelocStringTable.strTab.rstStrs[table->relTabName];
 
 		rtrace("---------------- Table %d -----------------", i);
-		rtrace("Section: %d | Name Index: %d | Name: %s | Entry Count: %d", table->relSect, table->relTabName, relTabName, table->relCount);
+		rtrace("Section: %d | Name Index: %d | Name: %s | Entry Count: %d || FileCtx: %d |", table->relSect, table->relTabName, relTabName, table->relCount, relocTable->trelocs.filectxIndices[i]);
 		rtrace("------------------------------------------");
 		rtrace(" Num |  Offset  | Symbol | Type | Addend |");
 		rtrace("------------------------------------------");
@@ -125,7 +138,7 @@ void displayRelocTable(RelocTable* relocTable) {
 	}
 
 	rtrace("-- Dynamic Relocation Tables --");
-	rtrace("Total Tables: %d", relocTable->drelocs.count);
+	rtrace("Total Tables: %d%c", relocTable->drelocs.count, (relocTable->drelocs.count != 0) ? '\0' : '\n');
 	for (int i = 0; i < relocTable->drelocs.count; i++) {
 		AOEFFDRelTab* table = &relocTable->drelocs.tables[i];
 
@@ -162,7 +175,7 @@ void displayRelocTable(RelocTable* relocTable) {
 
 			rtrace("%4d | 0x%06X |  %5d | %4s | 0x%04X |", j, entry->reOff, entry->reSymb, typeStr, entry->reAddend);
 		}
-		rtrace("------------------------------------------");
+		rtrace("------------------------------------------\n");
 	}
 }
 

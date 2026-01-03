@@ -12,12 +12,21 @@ typedef struct RelocTable {
 		AOEFFTRelTab* tables;
 		int count;
 		int cap;
+
+		int* filectxIndices; // Indices of the file contexts each static relocation table belongs to
+		// Note that this ties in the table to its file
+		// The relocated symbols may not necessarily be for the same file
+		// Main example are externs
+		// If index is not -1, it refers to a symbol in the symbol table
+		// That symbol has its file context index, which refers to the file it is defined at
 	} trelocs;
 
 	struct {
 		AOEFFDRelTab* tables;
 		int count;
 		int cap;
+
+		int* filectxIndices; // Indices of the file contexts each dynamic relocation table belongs to
 	} drelocs;
 
 	struct {
@@ -33,7 +42,7 @@ typedef struct RelocTable {
 RelocTable* initRelocTable();
 void deinitRelocTable(RelocTable* relocTable);
 
-void appendTRelocTable(RelocTable* relocTable, AOEFFTRelTab* treloc);
+void appendTRelocTable(RelocTable* relocTable, AOEFFTRelTab* treloc, int filectxIndex);
 void appendDRelocTable(RelocTable* relocTable, AOEFFDRelTab* dreloc);
 
 void displayRelocTable(RelocTable* relocTable);

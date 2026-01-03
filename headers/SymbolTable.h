@@ -11,6 +11,7 @@
  */
 typedef struct SymbolTable {
 	AOEFFSymEnt* symbols;
+	int* filectxIndices; // Indices of the file contexts each symbol belongs to
 	uint32_t count;
 	uint32_t cap;
 
@@ -34,7 +35,7 @@ typedef struct SymbolTable {
 SymbolTable* initSymbolTable();
 void deinitSymbolTable(SymbolTable* symbTable);
 
-void appendSymbol(SymbolTable* symbTable, AOEFFSymEnt symb);
+AOEFFSymEnt* appendSymbol(SymbolTable* symbTable, AOEFFSymEnt symb);
 
 
 int getSymbolByName(SymbolTable* symbTable, const char* name, int startIndex);

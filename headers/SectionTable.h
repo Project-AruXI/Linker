@@ -16,18 +16,13 @@ typedef struct FileContext {
  * A wrapper around the AOEFF section table structure.
  */
 typedef struct SectionTable {
-	AOEFFSectHdr* sections;
-	int count;
-	int cap;
+	AOEFFSectHdr sections[4]; // 0: .data; 1: .const; 2: .bss; 3: .text
 
 	struct {
 		FileCtx* ctx;
 		int count;
 		int cap;
 	} filectxs;
-
-	// The total size of each section can either be stored here or computed using the section headers/file contexts
-	// For example, the size of the text section is the last file context's textOffset + size of the section from section header
 
 	uint8_t* _data;
 	uint8_t* _const;

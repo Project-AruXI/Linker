@@ -15,6 +15,9 @@ SymbolTable* initSymbolTable() {
 	symbTable->count = 0;
 	symbTable->cap = 10;
 
+	symbTable->filectxIndices = (int*) malloc(sizeof(int) * 10);
+	if (!symbTable->filectxIndices) emitError(ERR_MEM, "Failed to allocate memory for symbol table file context indices");
+
 
 	uint32_t* unresolvedIndices = (uint32_t*) malloc(sizeof(uint32_t) * 10);
 	if (!unresolvedIndices) emitError(ERR_MEM, "Failed to allocate memory for unresolved symbol indices");
@@ -42,13 +45,18 @@ void deinitSymbolTable(SymbolTable* symbTable) {
 	free(symbTable);
 }
 
-void appendSymbol(SymbolTable* symbTable, AOEFFSymEnt symb) {
+AOEFFSymEnt* appendSymbol(SymbolTable* symbTable, AOEFFSymEnt symb) {
 	if (symbTable->count >= symbTable->cap) {
 		symbTable->cap *= 2;
 		symbTable->symbols = (AOEFFSymEnt*) realloc(symbTable->symbols, sizeof(AOEFFSymEnt) * symbTable->cap);
 		if (!symbTable->symbols) emitError(ERR_MEM, "Failed to reallocate memory for symbol table entries");
+
+		symbTable->filectxIndices = (int*) realloc(symbTable->filectxIndices, sizeof(int) * symbTable->cap);
+		if (!symbTable->filectxIndices) emitError(ERR_MEM, "Failed to reallocate memory for symbol table file context indices");
 	}
 	symbTable->symbols[symbTable->count++] = symb;
+
+	return &symbTable->symbols[symbTable->count - 1];
 }
 
 int getSymbolByName(SymbolTable* symbTable, const char* name, int startIndex) {
@@ -83,8 +91,8 @@ void displaySymbolTable(SymbolTable* symbTable) {
 	rtrace("====== Symbol Table ======");
 	rtrace("Total symbols: %d", symbTable->count);
 	rtrace("--------------------------");
-	rtrace(" # | Name Index |    Name    |  Size  | Value  | (Type,Locality) | Section |");
-	rtrace("----------------------------------------------------------------------------");
+	rtrace(" # | Name Index |    Name    |  Size  | Value  | (Type,Locality) | Section || FileCtx |");
+	rtrace("---------------------------------------------------------------------------------------");
 	for (uint32_t i = 0; i < symbTable->count; i++) {
 		AOEFFSymEnt* symbEnt = &symbTable->symbols[i];
 	
@@ -119,9 +127,9 @@ void displaySymbolTable(SymbolTable* symbTable) {
 		}
 
 		char* symbName = &symbTable->SymbolStringTable.strTab.stStrs[symbEnt->seSymbName];
-		rtrace("%2d | %10d | %10s | 0x%04X | 0x%04X |  (%s, %s)  |   %2d    |", i, symbEnt->seSymbName, symbName, 
-				symbEnt->seSymbSize, symbEnt->seSymbVal, typeStr, locStr, symbEnt->seSymbSect);
-		rtrace("----------------------------------------------------------------------------");
+		rtrace("%2d | %10d | %10s | 0x%04X | 0x%04X |  (%s, %s)  |   %2d    ||   %2d    |", i, symbEnt->seSymbName, symbName, 
+				symbEnt->seSymbSize, symbEnt->seSymbVal, typeStr, locStr, symbEnt->seSymbSect, symbTable->filectxIndices[i]);
+		rtrace("---------------------------------------------------------------------------------------");
 	}
 }
 
