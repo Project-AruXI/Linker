@@ -190,6 +190,61 @@ void merge(const char* infile, GlobalTables* globalTables) {
 			continue;
 		}
 
+		// If the symbol already exists:
+		// - One could be an external, the other defined
+		//   - If the existing one is external and the new one is defined, update the existing one to be defined
+		//   - If the existing one is defined and the new one is external, skip
+		// - Both defined, in which case it's an error
+		// - Both external, skip; only one external symbol is needed
+
+		int symbIndexInGlobal = getSymbolByName(globalTables->symbolTable, symName, 0);
+		if (symbIndexInGlobal != -1) {
+			// The symbol already exists in the global symbol table
+			AOEFFSymEnt* existingSymEntry = &globalTables->symbolTable->symbols[symbIndexInGlobal];
+			
+			uint8_t existingLoc = SE_GET_LOC(existingSymEntry->seSymbInfo);
+			uint8_t existingType = SE_GET_TYPE(existingSymEntry->seSymbInfo);
+			uint32_t existingSect = existingSymEntry->seSymbSect;
+			// Symbols that are marked as external are: global, type of none, sect of undefined
+
+			uint8_t newLoc = SE_GET_LOC(symbEnt->seSymbInfo);
+			uint8_t newType = SE_GET_TYPE(symbEnt->seSymbInfo);
+			uint32_t newSect = symbEnt->seSymbSect;
+
+			if (existingLoc == SE_GLOBL && existingType == SE_NONE_T && existingSect == SE_SECT_UNDEF) {
+				trace("Existing symbol %s is external", symName);
+				// Existing is external
+				if (newLoc == SE_GLOBL && newType != SE_NONE_T && newSect != SE_SECT_UNDEF) {
+					trace("New symbol %s is defined", symName);
+					// New is defined
+					log("Updating existing external symbol %s to be defined", symName);
+					existingSymEntry->seSymbInfo = symbEnt->seSymbInfo;
+					existingSymEntry->seSymbSect = symbEnt->seSymbSect;
+					existingSymEntry->seSymbVal = symbEnt->seSymbVal;
+					existingSymEntry->seSymbSize = symbEnt->seSymbSize;
+					continue;
+				} else {
+					trace("New symbol %s is also external", symName);
+					// New is also external, skip
+					log("Skipping addition of symbol %s as it already exists as an external symbol", symName);
+					continue;
+				}
+			} else {
+				trace("Existing symbol %s is defined", symName);
+				// Existing is defined
+				if (newLoc == SE_GLOBL && newType == SE_NONE_T && newSect == SE_SECT_UNDEF) {
+					trace("New symbol %s is external", symName);
+					// New is external, skip
+					log("Skipping addition of symbol %s as it already exists as a defined symbol", symName);
+					continue;
+				} else {
+					trace("New symbol %s is defined", symName);
+					// Both are defined, error
+					emitError(ERR_REDEFINED, "Symbol %s is defined multiple times (in file %s)", symName, infile);
+				}
+			}
+		}
+
 
 		log("Symbol %d: nameIdx=%d (%s), size=0x%X, val=0x%X, info=0x%X, sect=%d", i, symbEnt->seSymbName, symName, symbEnt->seSymbSize, symbEnt->seSymbVal, symbEnt->seSymbInfo, symbEnt->seSymbSect);
 		appendSymbol(globalTables->symbolTable, *symbEnt);
