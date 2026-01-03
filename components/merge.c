@@ -30,6 +30,21 @@ static void* mapObjectFile(const char* path) {
 	return ptr;	
 }
 
+
+void updateSymbolAddressValue(AOEFFSymEnt* addedSymbol, const char* symName, FileCtx filectx) {
+	// Get the section's global offset
+	uint32_t sectionGlobalOffset = 0;
+	if (addedSymbol->seSymbSect == 3) sectionGlobalOffset = filectx.textOffset;
+	else if (addedSymbol->seSymbSect == 0) sectionGlobalOffset = filectx.dataOffset;
+	else if (addedSymbol->seSymbSect == 1) sectionGlobalOffset = filectx.constOffset;
+	else emitError(ERR_INTERNAL, "Unsupported section index %d for symbol %s while updating symbol value", addedSymbol->seSymbSect, symName);
+
+	log("Updating symbol %s's value from 0x%X to 0x%X (section global offset 0x%X, original value 0x%X)", 
+			symName, addedSymbol->seSymbVal, sectionGlobalOffset + addedSymbol->seSymbVal, sectionGlobalOffset, addedSymbol->seSymbVal);
+	addedSymbol->seSymbVal = sectionGlobalOffset + addedSymbol->seSymbVal;
+}
+
+
 void merge(const char* infile, GlobalTables* globalTables) {
 	initScope("merge");
 
@@ -102,10 +117,15 @@ void merge(const char* infile, GlobalTables* globalTables) {
 			} else {
 				newGlobalText = (uint32_t*) realloc(globalTables->sectionTable->_text, newGlobalTextSize);
 				if (!newGlobalText) emitError(ERR_MEM, "Failed to reallocate memory for global text section");
+				detail("Reallocated to %p", newGlobalText);
 			}
 			globalTables->sectionTable->_text = newGlobalText;
 			// Copy over the new text section data
-			memcpy((uint8_t*) globalTables->sectionTable->_text + prevFilectxTextOffset, aobjText, aobjTextSize);
+			memcpy((uint8_t*) globalTables->sectionTable->_text + prevSizeSect, aobjText, aobjTextSize);
+			detail("Copied text data to %p (prevSizeSect=0x%X)", (uint8_t*) globalTables->sectionTable->_text + prevSizeSect, prevSizeSect);
+			detail("First instruction of text section to add: 0x%X", aobjText[0]);
+			detail("%p", globalTables->sectionTable->_text);
+
 		} else if (sectHdr->shSectName[1] == 'd') { // .data
 			uint8_t* aobjData = (uint8_t*) _obj + sectionOffset;
 			uint32_t aobjDataSize = sectionSize;
@@ -231,6 +251,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 					existingSymEntry->seSymbInfo = symbEnt->seSymbInfo;
 					existingSymEntry->seSymbSect = symbEnt->seSymbSect;
 					existingSymEntry->seSymbVal = symbEnt->seSymbVal;
+					updateSymbolAddressValue(existingSymEntry, symName, filectx);
 					existingSymEntry->seSymbSize = symbEnt->seSymbSize;
 					globalTables->symbolTable->filectxIndices[symbIndexInGlobal] = filectxIndex;
 					continue;
@@ -267,15 +288,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 		// The old value is just an offset in the (local) section
 		// The new value is the global section's offset + the old value
 		if (SE_GET_TYPE(addedSymbol->seSymbInfo) != SE_NONE_T && addedSymbol->seSymbSect != SE_SECT_UNDEF) {
-			// Get the section's global offset
-			uint32_t sectionGlobalOffset = 0;
-			if (addedSymbol->seSymbSect == 3) sectionGlobalOffset = filectx.textOffset;
-			else if (addedSymbol->seSymbSect == 0) sectionGlobalOffset = filectx.dataOffset;
-			else if (addedSymbol->seSymbSect == 1) sectionGlobalOffset = filectx.constOffset;
-			else emitError(ERR_INTERNAL, "Unsupported section index %d for symbol %s while updating symbol value", addedSymbol->seSymbSect, symName);
-
-			log("Updating symbol %s's value from 0x%X to 0x%X", symName, addedSymbol->seSymbVal, sectionGlobalOffset + addedSymbol->seSymbVal);
-			addedSymbol->seSymbVal = sectionGlobalOffset + addedSymbol->seSymbVal;
+			updateSymbolAddressValue(addedSymbol, symName, filectx);
 
 			globalTables->symbolTable->filectxIndices[globalTables->symbolTable->count - 1] = filectxIndex;
 		} else {

@@ -7,6 +7,7 @@
 #include "config.h"
 #include "dylink.h"
 #include "merge.h"
+#include "relocate.h"
 
 
 Config config = {
@@ -131,8 +132,6 @@ int main(int argc, char const* argv[]) {
 	globalTables.symbolTable = initSymbolTable();
 	globalTables.sectionTable = initSectionTable();
 	globalTables.relocTable = initRelocTable();
-	globalTables.stringTable = (char*) malloc(sizeof(char) * 64);
-	if (!globalTables.stringTable) emitError(ERR_MEM, "Failed to allocate memory for global string table");
 
 	for (int i = 0; infiles[i] != NULL; i++) {
 		const char* infile = infiles[i];
@@ -140,6 +139,19 @@ int main(int argc, char const* argv[]) {
 		merge(infile, &globalTables);
 	}
 
+	displayRelocTable(globalTables.relocTable);
+	displaySymbolTable(globalTables.symbolTable);
+	displaySectionTable(globalTables.sectionTable);
+
+	// At this point, symbol tables have been merged (global only), section tables have been merged,
+	//   relocation tables have been merged, and contents (text and data) have been merged
+	// Relocations are now to be made
+
+	relocate(globalTables.relocTable, globalTables.sectionTable, globalTables.symbolTable);
+
+
+
+	
 	// All unresolved symbols at this point should be unresolved due to them being in dynamic libraries
 	// The dynamic library table will hold the libraries actually used and the symbols that "imported"
 

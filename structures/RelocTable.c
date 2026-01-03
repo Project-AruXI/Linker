@@ -78,6 +78,9 @@ void appendTRelocTable(RelocTable* relocTable, AOEFFTRelTab* treloc, int filectx
 		relocTable->trelocs.tables[relocTable->trelocs.count].relEntries[i] = trueEntries[i];
 		// NOTE TO SELF: The reSymb field is the index into the symbol table, which very easily might become out of sync
 		// This will be updated after
+		// Another note: reOff is very important to be kept locally and not changed
+		// This is because it is the offset from the start of the section, which is needed for relocation
+		// Especially for branching where the offset is calculated from the instruction's location
 		trace("Copied relocation entry %d: off=0x%X, symb=%d, type=%d, addend=0x%X", i,
 		      trueEntries[i].reOff,
 		      trueEntries[i].reSymb,

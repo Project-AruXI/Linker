@@ -1,0 +1,191 @@
+#include <stdlib.h>
+
+
+#include "relocate.h"
+#include "diagnostics.h"
+
+
+
+
+
+static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymEnt* symbEntry, uint32_t toRelOffset) {
+	rdetail("First instruction in text section before relocation: 0x%X", ((uint32_t*)sectionData)[0]);
+	rdetail("%p", sectionData);
+
+	uint32_t* location = (uint32_t*) ((uint8_t*) sectionData + toRelOffset);
+	uint32_t symbValue = symbEntry->seSymbVal;
+	uint32_t originalData = *location;
+
+	rlog("Applying relocation at offset 0x%X: original data=0x%X, symbol value=0x%X, type=%d, addend=0x%X",
+	     toRelOffset,
+	     originalData,
+	     symbValue,
+	     relEntry->reType,
+	     relEntry->reAddend);
+
+		uint16_t newUnsignedData = 0;
+		int16_t newSigned16Data = 0;
+		int32_t newSigned32Data = 0;
+
+	switch (relEntry->reType) {
+		case RE_ARU32_ABS14: // unsigned 14-bit relocation in bits 10-23
+			*location &= ~(0x3FFF << 10); // Clear bits 10-23
+
+			newUnsignedData = (symbValue + relEntry->reAddend) & 0x3FFF;
+			rdetail("Computed new ABS14 data: 0x%X", newUnsignedData);
+			*location |= (newUnsignedData << 10);
+			break;
+		case RE_ARU32_MEM9: // signed 9-bit relocation in bits 15-23
+			*location &= ~(0x1FF << 15); // Clear bits 15-23
+			
+			newSigned16Data = (int16_t)(symbValue + relEntry->reAddend);
+			rdetail("Computed new MEM9 data: 0x%X", newSigned16Data);
+			*location |= ((newSigned16Data & 0x1FF) << 15);
+			break;
+		case RE_ARU32_IR24: // signed 24-bit relocation in bits 0-23
+			// This is a branch instruction
+			// The value is (target - lp) << 2
+			// Lp is stored as the offset of this relocation
+			*location &= ~(0xFFFFFF); // Clear bits 0-23
+
+			newSigned32Data = (int32_t)((symbValue + relEntry->reAddend - relEntry->reOff) >> 2);
+			rdetail("Computed new IR24 data: 0x%X (symbValue=0x%X, addend=0x%X, reOff=0x%X)", 
+					newSigned32Data, symbValue, relEntry->reAddend, relEntry->reOff);
+
+			*location |= (newSigned32Data & 0xFFFFFF);
+			break;
+		case RE_ARU32_IR19: // signed 19-bit relocation in bits 5-23
+			// Same case as IR24
+			*location &= ~(0x7FFFF << 5); // Clear bits 5-23
+
+			newSigned32Data = (int32_t)((symbValue + relEntry->reAddend - relEntry->reOff) >> 2);
+			rdetail("Computed new IR19 data: 0x%X", newSigned32Data);
+
+			*location |= ((newSigned32Data & 0x7FFFF) << 5);
+			break;
+		case RE_ARU32_DECOMP:
+			
+			break;
+		default:
+			emitError(ERR_INTERNAL, "Unsupported relocation type %d", relEntry->reType);
+			break;
+	}
+
+	rlog("Relocated data at offset 0x%X to 0x%X", relEntry->reOff, *location);
+}
+
+
+void relocate(RelocTable* relocTable, SectionTable* sectTable, SymbolTable* symbTable) {
+	initScope("relocate");
+
+	log("Applying relocations...\n");
+
+	for (int i = 0; i < relocTable->trelocs.count; i++) {
+		AOEFFTRelTab* table = &relocTable->trelocs.tables[i];
+
+		char* relTabName = &relocTable->RelocStringTable.strTab.rstStrs[table->relTabName];
+
+		rtrace("---------------- Table %d -----------------", i);
+		rtrace("Section: %d | Name: %s | Entry Count: %d || FileCtx: %d |", table->relSect, relTabName, table->relCount, relocTable->trelocs.filectxIndices[i]);
+		rtrace("------------------------------------------");
+		rtrace(" Num |  Offset  | Symbol | Type | Addend |");
+		rtrace("------------------------------------------");
+
+		char* typeStr = NULL;
+		for (uint32_t j = 0; j < table->relCount; j++) {
+			AOEFFTRelEnt* entry = &table->relEntries[j];
+
+			switch (entry->reType) {
+				case RE_ARU32_ABS14:
+					typeStr = "ABS14";
+					break;
+				case RE_ARU32_MEM9:
+					typeStr = "MEM9";
+					break;
+				case RE_ARU32_IR24:
+					typeStr = "IR24";
+					break;
+				case RE_ARU32_IR19:
+					typeStr = "IR19";
+					break;
+				case RE_ARU32_DECOMP:
+					typeStr = "DECOMP";
+					break;
+				default:
+					typeStr = "UNKNOWN";
+					break;
+			}
+
+			rtrace("%4d | 0x%06X |  %5d | %4s | 0x%04X |", j, entry->reOff, entry->reSymb, typeStr, entry->reAddend);
+
+			// For now, skip when symbol index is -1
+			if (entry->reSymb == (uint8_t)-1) {
+				rlog("Skipping relocation entry %d with symbol index -1", j);
+				continue;
+			}
+
+			void* sectionData = NULL;
+			if (table->relSect == 0) sectionData = sectTable->_data;
+			else if (table->relSect == 1) sectionData = sectTable->_const;
+			else if (table->relSect == 3) sectionData = sectTable->_text;
+
+			// Apply relocation
+
+			// Note that relOff holds the local offset form the start of the section
+			// However, the sectionData is already the global section data
+			// This primarily applies for branching where it is used for the LP calculation
+			// Update it so that it is the global offset
+			// This is done using the symbol's file context to find where the section starts globally
+			// If, locally, the symbol is at offset 0x100 in .text, and that file's .text starts at 0x2000 globally
+			// Then the global offset is 0x2000 + 0x100 = 0x2100
+
+			AOEFFSymEnt* symbEntry = &symbTable->symbols[entry->reSymb];
+
+			int symbFilectxIndex = symbTable->filectxIndices[entry->reSymb];
+			rdetail("Symbol %d belongs to file context index %d", entry->reSymb, symbFilectxIndex);
+			FileCtx* symbolFilectx = &sectTable->filectxs.ctx[symbFilectxIndex];
+
+			// Update reOff to be global offset
+
+			uint32_t sectOffset = 0; // The offset where the defined symbol's section starts globally
+			if (table->relSect == 0) { // .data
+				sectOffset = symbolFilectx->dataOffset;
+				rdetail("Symbol's file context section offset: dataOffset=0x%X", symbolFilectx->dataOffset);
+				rdetail("Resolved to 0x%X in data", sectOffset);
+			} else if (table->relSect == 1) { // .const
+				sectOffset = symbolFilectx->constOffset;
+				rdetail("Symbol's file context section offset: constOffset=0x%X", symbolFilectx->constOffset);
+				rdetail("Resolved to 0x%X in const", sectOffset);
+			} else if (table->relSect == 3) { // .text
+				sectOffset = symbolFilectx->textOffset;
+				rdetail("Symbol's file context section offset: textOffset=0x%X", symbolFilectx->textOffset);
+				rdetail("Resolved to 0x%X in text", sectOffset);
+			}
+			rdetail("Symbol's file context section offset: 0x%X", sectOffset);
+
+			// The location to relocate is still needed, indicated by reOff
+			// However, as mentioned, it needs to be updated to global offset
+			uint32_t toRelOffset = entry->reOff;
+			// Update to global offset, dependent on where the section to relocate starts at globally
+			FileCtx* relFilectx = &sectTable->filectxs.ctx[relocTable->trelocs.filectxIndices[i]];
+			if (table->relSect == 0) { // .data
+				toRelOffset += relFilectx->dataOffset;
+				rdetail("Relocation's file context data offset: 0x%X", relFilectx->dataOffset);
+			} else if (table->relSect == 1) { // .const
+				toRelOffset += relFilectx->constOffset;
+				rdetail("Relocation's file context const offset: 0x%X", relFilectx->constOffset);
+			} else if (table->relSect == 3) { // .text
+				toRelOffset += relFilectx->textOffset;
+				rdetail("Relocation's file context text offset: 0x%X", relFilectx->textOffset);
+			}
+			rdetail("Computed relocation global offset: 0x%X", toRelOffset);
+
+			// entry->reOff += sectOffset;
+
+			rdetail("Updated relocation entry %d offset to global offset 0x%X", j, entry->reOff);
+
+			applyRelocation(sectionData, entry, symbEntry, toRelOffset);
+		}
+		rtrace("------------------------------------------\n");
+	}
+}
