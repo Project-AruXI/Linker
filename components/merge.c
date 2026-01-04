@@ -96,14 +96,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 
 			appendSection(globalTables->sectionTable, sectHdr, aobjText);
 
-			// As per the comment, the size of the global text section is the last file context's textOffset + size of the section from section header
-			uint32_t prevFilectxTextOffset = 0;
-			if (globalTables->sectionTable->filectxs.count != 0) {
-				FileCtx* prevFilectx = &globalTables->sectionTable->filectxs.ctx[globalTables->sectionTable->filectxs.count - 1];
-				prevFilectxTextOffset = prevFilectx->textOffset;
-			}
-			log("Previous file context text offset: 0x%X", prevFilectxTextOffset);
-			uint32_t newGlobalTextSize = prevFilectxTextOffset + sectHdr->shSectSize;
+			uint32_t newGlobalTextSize = prevSizeSect + sectHdr->shSectSize;
 			// The new file context's text offset is the previous global text size
 			filectx.textOffset = prevSizeSect;
 			log("Updated file context text offset to 0x%X", filectx.textOffset);
@@ -134,14 +127,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 
 			appendSection(globalTables->sectionTable, sectHdr, aobjData);
 
-			// As per the comment, the size of the global data section is the last file context's dataOffset + size of the section from section header
-			uint32_t prevFilectxDataOffset = 0;
-			if (globalTables->sectionTable->filectxs.count != 0) {
-				FileCtx* prevFilectx = &globalTables->sectionTable->filectxs.ctx[globalTables->sectionTable->filectxs.count - 1];
-				prevFilectxDataOffset = prevFilectx->dataOffset;
-			}
-			log("Previous file context data offset: 0x%X", prevFilectxDataOffset);
-			uint32_t newGlobalDataSize = prevFilectxDataOffset + sectHdr->shSectSize;
+			uint32_t newGlobalDataSize = prevSizeSect + sectHdr->shSectSize;
 			// The new file context's data offset is the previous global data size
 			filectx.dataOffset = prevSizeSect;
 			log("Updated file context data offset to 0x%X", filectx.dataOffset);
@@ -158,7 +144,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 			}
 			globalTables->sectionTable->_data = newGlobalData;
 			// Copy over the new data section data
-			memcpy((uint8_t*) globalTables->sectionTable->_data + prevFilectxDataOffset, aobjData, aobjDataSize);
+			memcpy((uint8_t*) globalTables->sectionTable->_data + prevSizeSect, aobjData, aobjDataSize);
 		} else if (sectHdr->shSectName[1] == 'c') { // .const
 			uint8_t* aobjConst = (uint8_t*) _obj + sectionOffset;
 			uint32_t aobjConstSize = sectionSize;
@@ -167,14 +153,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 
 			appendSection(globalTables->sectionTable, sectHdr, aobjConst);
 
-			// As per the comment, the size of the global const section is the last file context's constOffset + size of the section from section header
-			uint32_t prevFilectxConstOffset = 0;
-			if (globalTables->sectionTable->filectxs.count != 0) {
-				FileCtx* prevFilectx = &globalTables->sectionTable->filectxs.ctx[globalTables->sectionTable->filectxs.count - 1];
-				prevFilectxConstOffset = prevFilectx->constOffset;
-			}
-			log("Previous file context const offset: 0x%X", prevFilectxConstOffset);
-			uint32_t newGlobalConstSize = prevFilectxConstOffset + sectHdr->shSectSize;
+			uint32_t newGlobalConstSize = prevSizeSect + sectHdr->shSectSize;
 			// The new file context's const offset is the previous global const size
 			filectx.constOffset = prevSizeSect;
 			log("Updated file context const offset to 0x%X", filectx.constOffset);
@@ -191,7 +170,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 			}
 			globalTables->sectionTable->_const = newGlobalConst;
 			// Copy over the new const section data
-			memcpy((uint8_t*) globalTables->sectionTable->_const + prevFilectxConstOffset, aobjConst, aobjConstSize);
+			memcpy((uint8_t*) globalTables->sectionTable->_const + prevSizeSect, aobjConst, aobjConstSize);
 		} else {
 			emitError(ERR_INVALID_FORMAT, "Unsupported section type in input file %s: %.8s", infile, sectHdr->shSectName);
 		}
@@ -319,12 +298,10 @@ void merge(const char* infile, GlobalTables* globalTables) {
 			uint32_t symbIndex = relEnt->reSymb; // The old symbol index
 			AOEFFSymEnt* localSymbEnt = &symbEntries[symbIndex];
 			char* localSymbName = &strTab.stStrs[localSymbEnt->seSymbName];
-			int globalSymbIndex = getSymbolByName(globalTables->symbolTable, localSymbName, startIndexOfSymbols);
+			int globalSymbIndex = getSymbolByName(globalTables->symbolTable, localSymbName, 0);
 			if (globalSymbIndex == -1 && SE_GET_LOC(localSymbEnt->seSymbInfo) != SE_LOCAL) emitError(ERR_INTERNAL, "Failed to find symbol %s in global symbol table while updating relocation entries", localSymbName);
 			// Local symbols are not in the global symbol table but may still be referenced in relocation entries
 			// Relocation handling will only occur in one place, so to mark as such, set to -1 (aka leave as is)
-			// Highly doubt relocations really need symbol information for local symbols
-			// Big assumption!!
 
 			log("Updating relocation entry %d's symbol index from %d (local) to %d (global) for symbol %s", j, symbIndex, globalSymbIndex, localSymbName);
 			globalTables->relocTable->trelocs.tables[globalTables->relocTable->trelocs.count - 1].relEntries[j].reSymb = (uint8_t) globalSymbIndex;
