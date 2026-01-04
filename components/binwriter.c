@@ -30,8 +30,11 @@ static uint32_t getTRelTabSize(AOEFFTRelTab* relocTables, uint32_t relTabCount) 
 	return totalSize;
 }
 
-static uint32_t getEntrySymbolAddress(SymbolTable* symbTable) {
-	const char* entrySymbolName = "_init";
+static uint32_t getEntrySymbolAddress(SymbolTable* symbTable, Config* config) {
+	char* entrySymbolName = NULL;
+	if (config->useStdLib) entrySymbolName = "main";
+	else entrySymbolName = "_init";
+
 	int entrySymbIndex = getSymbolByName(symbTable, entrySymbolName, 0);
 	if (entrySymbIndex == -1) emitError(ERR_UNDEFINED, "Entry point symbol %s is undefined", entrySymbolName);
 
@@ -136,7 +139,7 @@ void writeBinary(Config* config, GlobalTables* globalTables) {
 	AOEFFhdr header = {
 		.hID = {AH_ID0, AH_ID1, AH_ID2, AH_ID3},
 		.hType = AHT_EXEC, // For now, make it be exe, implement other types later
-		.hEntry = getEntrySymbolAddress(globalTables->symbolTable),
+		.hEntry = getEntrySymbolAddress(globalTables->symbolTable, config),
 		.hSectOff = sizeof(AOEFFhdr),
 		.hSectSize = sectEntries,
 		.hSymbOff = symbOff,
