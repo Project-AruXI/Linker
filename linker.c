@@ -8,6 +8,7 @@
 #include "dylink.h"
 #include "merge.h"
 #include "relocate.h"
+#include "binwriter.h"
 
 
 Config config = {
@@ -149,16 +150,14 @@ int main(int argc, char const* argv[]) {
 
 	relocate(globalTables.relocTable, globalTables.sectionTable, globalTables.symbolTable);
 
-
-
 	
 	// All unresolved symbols at this point should be unresolved due to them being in dynamic libraries
 	// The dynamic library table will hold the libraries actually used and the symbols that "imported"
 
 	// DyLibTable* dyLibTable = dynLibBuild(globalSymTable, config.libpath, config.libs);
 	// showDyLibTable(dyLibTable);
-	 
 
+	writeBinary(&config, &globalTables);
 
 
 
