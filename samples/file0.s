@@ -1,6 +1,7 @@
 .extern file1Fxn
 
 .text
+.glob _init
 _init:
 	mv x0, #0x1
 	call file1Fxn
