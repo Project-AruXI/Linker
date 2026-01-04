@@ -48,9 +48,9 @@ static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymE
 			// Lp is stored as the offset of this relocation
 			*location &= ~(0xFFFFFF); // Clear bits 0-23
 
-			newSigned32Data = (int32_t)((symbValue + relEntry->reAddend - relEntry->reOff) >> 2);
+			newSigned32Data = (int32_t)((symbValue + relEntry->reAddend - toRelOffset) >> 2);
 			rdetail("Computed new IR24 data: 0x%X (symbValue=0x%X, addend=0x%X, reOff=0x%X)", 
-					newSigned32Data, symbValue, relEntry->reAddend, relEntry->reOff);
+					newSigned32Data, symbValue, relEntry->reAddend, toRelOffset);
 
 			*location |= (newSigned32Data & 0xFFFFFF);
 			break;
@@ -58,7 +58,7 @@ static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymE
 			// Same case as IR24
 			*location &= ~(0x7FFFF << 5); // Clear bits 5-23
 
-			newSigned32Data = (int32_t)((symbValue + relEntry->reAddend - relEntry->reOff) >> 2);
+			newSigned32Data = (int32_t)((symbValue + relEntry->reAddend - toRelOffset) >> 2);
 			rdetail("Computed new IR19 data: 0x%X", newSigned32Data);
 
 			*location |= ((newSigned32Data & 0x7FFFF) << 5);
@@ -180,11 +180,13 @@ void relocate(RelocTable* relocTable, SectionTable* sectTable, SymbolTable* symb
 			}
 			rdetail("Computed relocation global offset: 0x%X", toRelOffset);
 
-			// entry->reOff += sectOffset;
-
-			rdetail("Updated relocation entry %d offset to global offset 0x%X", j, entry->reOff);
-
 			applyRelocation(sectionData, entry, symbEntry, toRelOffset);
+
+			// The relocation will remain for the loader to use
+			// However, relOff is to be updated to global offset
+			// This is because the loader will need to know where to apply the relocation in the final binary
+			entry->reOff = toRelOffset;
+			rlog("Updated relocation entry %d's reOff to global offset 0x%X", j, entry->reOff);
 		}
 		rtrace("------------------------------------------\n");
 	}
