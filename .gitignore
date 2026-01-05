@@ -2,4 +2,5 @@ out/
 .vscode/
 **/*.o
 **/*.ao
+**/*.aru
 .gdbinit

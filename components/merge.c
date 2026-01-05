@@ -194,6 +194,8 @@ void merge(const char* infile, GlobalTables* globalTables) {
 
 		if (SE_GET_LOC(symbEnt->seSymbInfo) != SE_GLOBL) {
 			log("Skipping non-global symbol %d (%s)", i, symName);
+			// TODO: Sine relocation requires symbols, they cannot be ignored
+			// However, at the same time, they are not to be placed in the global symbol table
 			continue;
 		}
 

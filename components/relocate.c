@@ -12,6 +12,15 @@ static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymE
 	rdetail("First instruction in text section before relocation: 0x%X", ((uint32_t*)sectionData)[0]);
 	rdetail("%p", sectionData);
 
+	// TODO: in the case that the relocation type is DECOMP and the symbol is absolute, it means ld reg, =ABSVAL
+	// Refer to the comment in the assembler in `handleLDImmMove`
+	// In such case, apply the relocation but it needs to be dropped from the table since it is an absolute value, not an address
+	// This can be done when it can be figured out how to drop a relocation entry from the table safely
+	//  since it is looping based off on the count and cannot be updated in-place, but writeBinary uses the count directly
+	// Maybe have a list containing the indices of entries dropped
+	// After relocation, go to each index, shift all entries after it up to the next index back by one
+	// Repeat for all indices, the new count is original count - number of dropped entries
+
 	uint32_t* location = (uint32_t*) ((uint8_t*) sectionData + toRelOffset);
 	uint32_t symbValue = symbEntry->seSymbVal;
 	uint32_t originalData = *location;
@@ -64,7 +73,32 @@ static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymE
 			*location |= ((newSigned32Data & 0x7FFFF) << 5);
 			break;
 		case RE_ARU32_DECOMP:
-			
+			// A relocation of type DECOMP means that there are multiple relocations to be done
+			// The data is an address, split into three: high 14, mid 14, low 4
+			// The first instruction (*location) is to hold the high 14 bits, as if it was ABS14 rel type
+			// The second instruction (*(location + 2)) is to hold the mid 14 bits, as if it was ABS14 rel type
+			// The third instruction (*(location + 5)) is to hold the low 4 bits, as if it was ABS14 rel type
+
+			uint32_t fullAddress = symbValue + relEntry->reAddend;
+			uint16_t high14 = (fullAddress >> 18) & 0x3FFF;
+			uint16_t mid14 = (fullAddress >> 4) & 0x3FFF;
+			uint8_t low4 = fullAddress & 0xF;
+
+			rdetail("Decomposed full address 0x%X into high14=0x%X, mid14=0x%X, low4=0x%X", fullAddress, high14, mid14, low4);
+
+			// Apply high 14 bits
+			*location &= ~(0x3FFF << 10); // Clear bits 10-23
+			*location |= (high14 << 10);
+
+			// Apply mid 14 bits
+			uint32_t* midLocation = location + 1;
+			*midLocation &= ~(0x3FFF << 10); // Clear bits 10-23
+			*midLocation |= (mid14 << 10);
+
+			// Apply low 4 bits
+			uint32_t* lowLocation = location + 2;
+			*lowLocation &= ~(0xF << 10); // Clear bits 10-13
+			*lowLocation |= (low4 << 10);
 			break;
 		default:
 			emitError(ERR_INTERNAL, "Unsupported relocation type %d", relEntry->reType);
