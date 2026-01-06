@@ -8,7 +8,7 @@
 
 
 
-static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymEnt* symbEntry, uint32_t toRelOffset) {
+static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymEnt* symbEntry, uint32_t toRelOffset, uint32_t baseOffset) {
 	rdetail("First instruction in text section before relocation: 0x%X", ((uint32_t*)sectionData)[0]);
 	rdetail("%p", sectionData);
 
@@ -21,20 +21,24 @@ static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymE
 	// After relocation, go to each index, shift all entries after it up to the next index back by one
 	// Repeat for all indices, the new count is original count - number of dropped entries
 
+	// Later note: Since static relocations are not kept in the final binary, this is not necessary for now
+	// They will be needed for shared libraries but as dynamic relocations
+
 	uint32_t* location = (uint32_t*) ((uint8_t*) sectionData + toRelOffset);
 	uint32_t symbValue = symbEntry->seSymbVal;
 	uint32_t originalData = *location;
 
-	rlog("Applying relocation at offset 0x%X: original data=0x%X, symbol value=0x%X, type=%d, addend=0x%X",
-	     toRelOffset,
-	     originalData,
-	     symbValue,
-	     relEntry->reType,
-	     relEntry->reAddend);
+	rlog("Applying relocation at offset 0x%X: original data=0x%X, symbol value=0x%X, type=%d, addend=0x%X, baseOffset=0x%X",
+			toRelOffset,
+			originalData,
+			symbValue,
+			relEntry->reType,
+			relEntry->reAddend,
+			baseOffset);
 
-		uint16_t newUnsignedData = 0;
-		int16_t newSigned16Data = 0;
-		int32_t newSigned32Data = 0;
+	uint16_t newUnsignedData = 0;
+	int16_t newSigned16Data = 0;
+	int32_t newSigned32Data = 0;
 
 	switch (relEntry->reType) {
 		case RE_ARU32_ABS14: // unsigned 14-bit relocation in bits 10-23
@@ -57,9 +61,9 @@ static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymE
 			// Lp is stored as the offset of this relocation
 			*location &= ~(0xFFFFFF); // Clear bits 0-23
 
-			newSigned32Data = (int32_t)((symbValue + relEntry->reAddend - toRelOffset) >> 2);
-			rdetail("Computed new IR24 data: 0x%X (symbValue=0x%X, addend=0x%X, reOff=0x%X)", 
-					newSigned32Data, symbValue, relEntry->reAddend, toRelOffset);
+			newSigned32Data = (int32_t)(((baseOffset + symbValue + relEntry->reAddend) - (baseOffset + toRelOffset)) >> 2);
+			rdetail("Computed new IR24 data: 0x%X (symbValue=0x%X, addend=0x%X, reOff=0x%X, baseOffset=0x%X)", 
+					newSigned32Data, symbValue, relEntry->reAddend, toRelOffset, baseOffset);
 
 			*location |= (newSigned32Data & 0xFFFFFF);
 			break;
@@ -67,7 +71,7 @@ static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymE
 			// Same case as IR24
 			*location &= ~(0x7FFFF << 5); // Clear bits 5-23
 
-			newSigned32Data = (int32_t)((symbValue + relEntry->reAddend - toRelOffset) >> 2);
+			newSigned32Data = (int32_t)(((baseOffset + symbValue + relEntry->reAddend) - (baseOffset + toRelOffset)) >> 2);
 			rdetail("Computed new IR19 data: 0x%X", newSigned32Data);
 
 			*location |= ((newSigned32Data & 0x7FFFF) << 5);
@@ -79,13 +83,22 @@ static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymE
 			// The second instruction (*(location + 2)) is to hold the mid 14 bits, as if it was ABS14 rel type
 			// The third instruction (*(location + 5)) is to hold the low 4 bits, as if it was ABS14 rel type
 
-			uint32_t fullAddress = symbValue + relEntry->reAddend;
-			uint16_t high14 = (fullAddress >> 18) & 0x3FFF;
-			uint16_t mid14 = (fullAddress >> 4) & 0x3FFF;
-			uint8_t low4 = fullAddress & 0xF;
+			uint32_t fullNumber = symbValue + relEntry->reAddend;
 
-			rdetail("Decomposed full address 0x%X into high14=0x%X, mid14=0x%X, low4=0x%X", fullAddress, high14, mid14, low4);
+			// Recall that the value might either be an absolute number or an address
+			// In the case of an absolute number, baseOffset is not applied since it does not refer to an address
 
+			if (SE_GET_TYPE(symbEntry->seSymbInfo) != SE_ABSV_T) {
+				fullNumber += baseOffset;
+				rdetail("Relocated symbol is not absolute, full address to decompose: 0x%X", fullNumber);
+			} else rdetail("Relocated symbol is absolute, full number to decompose: 0x%X", fullNumber);
+
+
+			uint16_t high14 = (fullNumber >> 18) & 0x3FFF;
+			uint16_t mid14 = (fullNumber >> 4) & 0x3FFF;
+			uint8_t low4 = fullNumber & 0xF;
+
+			rdetail("Decomposed full address 0x%X into high14=0x%X, mid14=0x%X, low4=0x%X", fullNumber, high14, mid14, low4);
 			// Apply high 14 bits
 			*location &= ~(0x3FFF << 10); // Clear bits 10-23
 			*location |= (high14 << 10);
@@ -213,8 +226,11 @@ void relocate(RelocTable* relocTable, SectionTable* sectTable, SymbolTable* symb
 				rdetail("Relocation's file context text offset: 0x%X", relFilectx->textOffset);
 			}
 			rdetail("Computed relocation global offset: 0x%X", toRelOffset);
+			// Update it again for it to be in accordance of the section starting point in the final binary
+			// toRelOffset += sectTable->sectionOffsets[table->relSect];
+			// rdetail("Adjusted relocation global offset with final section offset: 0x%X", toRelOffset);
 
-			applyRelocation(sectionData, entry, symbEntry, toRelOffset);
+			applyRelocation(sectionData, entry, symbEntry, toRelOffset, sectTable->sectionOffsets[symbEntry->seSymbSect]);
 
 			// The relocation will remain for the loader to use
 			// However, relOff is to be updated to global offset

@@ -4,7 +4,7 @@
 #include "SectionTable.h"
 #include "diagnostics.h"
 
-SectionTable* initSectionTable() {
+SectionTable* initSectionTable(uint32_t dataStart, uint32_t constStart, uint32_t bssStart, uint32_t textStart) {
 	SectionTable* sectTable = (SectionTable*) malloc(sizeof(SectionTable));
 	if (!sectTable) emitError(ERR_MEM, "Failed to allocate memory for section table");
 
@@ -23,6 +23,11 @@ SectionTable* initSectionTable() {
 	strcpy(sectTable->sections[3].shSectName, ".text"); // .text
 	sectTable->sections[3].shSectOff = 0;
 	sectTable->sections[3].shSectSize = 0;
+
+	sectTable->sectionOffsets[0] = dataStart;
+	sectTable->sectionOffsets[1] = constStart;
+	sectTable->sectionOffsets[2] = bssStart;
+	sectTable->sectionOffsets[3] = textStart;
 
 	sectTable->filectxs.ctx = (FileCtx*) malloc(sizeof(FileCtx) * 2);
 	if (!sectTable->filectxs.ctx) emitError(ERR_MEM, "Failed to allocate memory for file contexts");

@@ -14,6 +14,8 @@
 Config config = {
 	.outfile = "out.aru",
 	.useStdLib = false, // For now, there is no stdlib
+	.isKernel = false,
+	.isDynamic = false,
 	.libpath = { "./libs", NULL },
 	.libs    = { "std.adlib", NULL },
 };
@@ -55,6 +57,8 @@ static const char** parseArgs(int argc, char const* argv[]) {
 	struct argparse_option options[] = {
 		OPT_STRING('o', "output", &config.outfile, "output file name", NULL, 0, 0),
 		OPT_BOOLEAN('v', "version", &showVersion, "show version and exit", NULL, 0, 0),
+		OPT_BOOLEAN('k', "kernel", &config.isKernel, "build as a kernel binary", NULL, 0, 0),
+		OPT_BOOLEAN('d', "dynamic", &config.isDynamic, "build as a dynamic library", NULL, 0, 0),
 		OPT_STRING('l', "library", NULL, "library to link against", &linkLibCallback, 0, 0),
 		OPT_STRING('L', "libpath", NULL, "library search path", &libpathCallback, 0, 0),
 		OPT_BOOLEAN(0, "no-stdlib", &config.useStdLib, "do not link against the standard library", NULL, 0, 0),
@@ -77,6 +81,10 @@ static const char** parseArgs(int argc, char const* argv[]) {
 		exit(0);
 	}
 
+	// Check flag compatibility
+	if (config.isKernel && config.isDynamic) {
+		emitError(ERR_INVALID_FORMAT, NULL, "Cannot build a kernel binary as a dynamic library.");
+	}
 
 	// Remaining arguments after options are input files
 	if (argc - nparsed < 1) {
@@ -129,9 +137,27 @@ int main(int argc, char const* argv[]) {
 	// Look up any library dependencies from the input files and check symbols
 	// Write final binary
 
+	uint32_t dataStart = 0x0;
+	uint32_t constStart = 0x0;
+	uint32_t bssStart = 0x0;
+	uint32_t textStart = 0x0;
+
+	if (config.isKernel) {
+		dataStart = 0xA0080000;
+		textStart = 0xD0080000;
+	} else if (!config.isKernel && !config.isDynamic) {
+		// Not kernel and not dynamic means its a normal executable
+		dataStart = 0x20090000;
+		constStart = 0x20080000;
+		bssStart = 0x20040000;
+		textStart = 0x20190000;
+	} else if (config.isDynamic) {
+		// There is no "starting" for dynamic libraries, they are loaded at arbitrary locations
+	}
+
 	GlobalTables globalTables;
 	globalTables.symbolTable = initSymbolTable();
-	globalTables.sectionTable = initSectionTable();
+	globalTables.sectionTable = initSectionTable(dataStart, constStart, bssStart, textStart);
 	globalTables.relocTable = initRelocTable();
 
 	for (int i = 0; infiles[i] != NULL; i++) {
@@ -149,6 +175,10 @@ int main(int argc, char const* argv[]) {
 	// Relocations are now to be made
 
 	relocate(globalTables.relocTable, globalTables.sectionTable, globalTables.symbolTable);
+
+
+	// globalTables.symbolTable = dropLocalSymbols(globalTables.symbolTable);
+	// globalTables.relocTable = dropStaticReloc(globalTables.relocTable, globalTables.symbolTable);
 
 	
 	// All unresolved symbols at this point should be unresolved due to them being in dynamic libraries

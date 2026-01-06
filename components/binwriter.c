@@ -120,11 +120,15 @@ void writeBinary(Config* config, GlobalTables* globalTables) {
 	strTabSize += 16; // Ending string is 16 bytes
 
 	uint32_t relStrOff = strTabOff + strTabSize;
-	uint32_t relStrSize = globalTables->relocTable->RelocStringTable.strbCount;
+	// uint32_t relStrSize = globalTables->relocTable->RelocStringTable.strbCount;
+	uint32_t relStrSize = 0;
 
-	uint32_t trelTabCount = globalTables->relocTable->trelocs.count;
+	// uint32_t trelTabCount = globalTables->relocTable->trelocs.count;
+	// uint32_t trelTabOff = relStrOff + relStrSize;
+	// uint32_t trelTabSize = getTRelTabSize(globalTables->relocTable->trelocs.tables, trelTabCount);
+	uint32_t trelTabCount = 0;
 	uint32_t trelTabOff = relStrOff + relStrSize;
-	uint32_t trelTabSize = getTRelTabSize(globalTables->relocTable->trelocs.tables, trelTabCount);
+	uint32_t trelTabSize = 0;
 
 	uint32_t drelTabCount = globalTables->relocTable->drelocs.count;
 	uint32_t drelTabOff = trelTabOff + trelTabSize;
@@ -180,16 +184,16 @@ void writeBinary(Config* config, GlobalTables* globalTables) {
 	uint8_t zeroBufferPadding[4] = {0};
 
 	// Write static relocation tables
-	for (uint32_t i = 0; i < trelTabCount; i++) {
-		AOEFFTRelTab* tab = &globalTables->relocTable->trelocs.tables[i];
-		rlog("Writing TReloc Table %d: relSect=0x%x, relTabName=0x%x, relCount=%d", i, tab->relSect, tab->relTabName, tab->relCount);
-		fwrite(&tab->relSect, sizeof(uint8_t), 1, outfile);
-		fwrite(zeroBufferPadding, 3, 1, outfile); // padding
-		fwrite(&tab->relTabName, sizeof(uint32_t), 1, outfile);
-		fwrite(&tab->relCount, sizeof(uint32_t), 1, outfile);
-		fwrite(zeroBufferPadding, 4, 1, outfile); // padding
-		fwrite(tab->relEntries, sizeof(AOEFFTRelEnt), tab->relCount, outfile);
-	}
+	// for (uint32_t i = 0; i < trelTabCount; i++) {
+	// 	AOEFFTRelTab* tab = &globalTables->relocTable->trelocs.tables[i];
+	// 	rlog("Writing TReloc Table %d: relSect=0x%x, relTabName=0x%x, relCount=%d", i, tab->relSect, tab->relTabName, tab->relCount);
+	// 	fwrite(&tab->relSect, sizeof(uint8_t), 1, outfile);
+	// 	fwrite(zeroBufferPadding, 3, 1, outfile); // padding
+	// 	fwrite(&tab->relTabName, sizeof(uint32_t), 1, outfile);
+	// 	fwrite(&tab->relCount, sizeof(uint32_t), 1, outfile);
+	// 	fwrite(zeroBufferPadding, 4, 1, outfile); // padding
+	// 	fwrite(tab->relEntries, sizeof(AOEFFTRelEnt), tab->relCount, outfile);
+	// }
 
 	// Write dynamic relocation tables
 	for (uint32_t i = 0; i < drelTabCount; i++) {

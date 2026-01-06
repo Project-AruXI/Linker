@@ -18,6 +18,8 @@ typedef struct FileContext {
 typedef struct SectionTable {
 	AOEFFSectHdr sections[4]; // 0: .data; 1: .const; 2: .bss; 3: .text
 
+	uint32_t sectionOffsets[4]; // Offsets of each section in the memory
+
 	struct {
 		FileCtx* ctx;
 		int count;
@@ -39,7 +41,7 @@ typedef enum {
 } SectionType;
 
 
-SectionTable* initSectionTable();
+SectionTable* initSectionTable(uint32_t dataStart, uint32_t constStart, uint32_t bssStart, uint32_t textStart);
 void deinitSectionTable(SectionTable* sectTable);
 
 void appendSection(SectionTable* sectTable, AOEFFSectHdr* sectHdr, void* sectionData);

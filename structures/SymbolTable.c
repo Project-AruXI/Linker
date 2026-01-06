@@ -73,18 +73,6 @@ int getSymbolByName(SymbolTable* symbTable, const char* name, int startIndex) {
 }
 
 void displaySymbolTable(SymbolTable* symbTable) {
-	/**
-	 * Display as:
-	 * ===== Symbol Table =====
-	 * Total symbols: x
-	 * -----------------------
-	 * # | Name Index | Name | Size | Value | Info (Type,Locality) | Section
-	 * ---------------------------------------------------------------------
-	 * x |		 x      | xxx  | 0xX  | 0xX   |   (X, X)           |   X
-	 * ---------------------------------------------------------------------
-	 * ...
-	 */
-
 	char* typeStr = NULL;
 	char* locStr = NULL;
 
@@ -162,4 +150,39 @@ uint32_t appendString(SymbolTable* symbTable, const char* str) {
 	rlog("Appended string to symbol string table: %s (index %d)", str, index);
 
 	return index;
+}
+
+
+SymbolTable* dropLocalSymbols(SymbolTable* symbTable) {
+	// Go through all the symbols
+	// If the symbol is not local, copy it to a new symbol table
+	// Also copy the strings used by the global symbols to a new string table
+	// Use the string indices of the "old" entry to find its string, copying it to the new string table
+	// Update the symbol entry's name index to the new string table index
+	SymbolTable* newSymbTable = initSymbolTable();
+
+	for (uint32_t i = 0; i < symbTable->count; i++) {
+		AOEFFSymEnt* symbEnt = &symbTable->symbols[i];
+		uint8_t symbLoc = SE_GET_LOC(symbEnt->seSymbInfo);
+
+		if (symbLoc == SE_GLOBL) {
+			// Copy symbol
+			AOEFFSymEnt newSymbEnt = *symbEnt;
+
+			// Copy string
+			char* symbName = &symbTable->SymbolStringTable.strTab.stStrs[symbEnt->seSymbName];
+			uint32_t newNameIdx = appendString(newSymbTable, symbName);
+			newSymbEnt.seSymbName = newNameIdx;
+
+			// Append to new symbol table
+			AOEFFSymEnt* addedSymb = appendSymbol(newSymbTable, newSymbEnt);
+			// Copy file context index
+			newSymbTable->filectxIndices[newSymbTable->count - 1] = symbTable->filectxIndices[i];
+		}
+	}
+
+	// Free the old symbol table
+	deinitSymbolTable(symbTable);
+
+	return newSymbTable;
 }

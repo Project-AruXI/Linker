@@ -53,4 +53,13 @@ void displaySymbolTable(SymbolTable* symbTable);
  */
 uint32_t appendString(SymbolTable* symbTable, const char* str);
 
+
+/**
+ * Removes all local symbols from the symbol table. This requires readjustment of the symbol table and the string table.
+ * Thus it returns a new symbol table instance with only global symbols.
+ * @param symbTable The symbol table to drop local symbols from
+ * @return The new symbol table instance with only global symbols
+ */
+SymbolTable* dropLocalSymbols(SymbolTable* symbTable);
+
 #endif

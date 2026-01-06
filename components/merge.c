@@ -192,13 +192,6 @@ void merge(const char* infile, GlobalTables* globalTables) {
 		AOEFFSymEnt* symbEnt = &symbEntries[i];
 		char* symName = &strTab.stStrs[symbEnt->seSymbName];
 
-		if (SE_GET_LOC(symbEnt->seSymbInfo) != SE_GLOBL) {
-			log("Skipping non-global symbol %d (%s)", i, symName);
-			// TODO: Sine relocation requires symbols, they cannot be ignored
-			// However, at the same time, they are not to be placed in the global symbol table
-			continue;
-		}
-
 		int filectxIndex = globalTables->sectionTable->filectxs.count - 1;
 
 		// If the symbol already exists:
@@ -207,12 +200,15 @@ void merge(const char* infile, GlobalTables* globalTables) {
 		//   - If the existing one is defined and the new one is external, skip
 		// - Both defined, in which case it's an error
 		// - Both external, skip; only one external symbol is needed
+		// - If local:
+		// 	 - Keep it in the table for now, all local symbols will be dropped after relocation
+		// 	 - Correction: locals will be kept unless an option to remove them will be added
 
 		int symbIndexInGlobal = getSymbolByName(globalTables->symbolTable, symName, 0);
 		if (symbIndexInGlobal != -1) {
 			// The symbol already exists in the global symbol table
 			AOEFFSymEnt* existingSymEntry = &globalTables->symbolTable->symbols[symbIndexInGlobal];
-			
+
 			uint8_t existingLoc = SE_GET_LOC(existingSymEntry->seSymbInfo);
 			uint8_t existingType = SE_GET_TYPE(existingSymEntry->seSymbInfo);
 			uint32_t existingSect = existingSymEntry->seSymbSect;
@@ -250,10 +246,15 @@ void merge(const char* infile, GlobalTables* globalTables) {
 					// New is external, skip
 					log("Skipping addition of symbol %s as it already exists as a defined symbol", symName);
 					continue;
-				} else {
+				} else if (existingLoc == SE_GLOBL && newLoc == SE_GLOBL) {
 					trace("New symbol %s is defined", symName);
 					// Both are defined, error
 					emitError(ERR_REDEFINED, "Symbol %s is defined multiple times (in file %s)", symName, infile);
+				} else if (existingLoc == SE_LOCAL || newLoc == SE_LOCAL) {
+					trace("At least one of the symbols %s is local", symName);
+					// At least one is local, keep both for now
+					log("Keeping local symbol %s in the global symbol table for now", symName);
+					// Continue to add the new symbol below
 				}
 			}
 		}
@@ -301,9 +302,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 			AOEFFSymEnt* localSymbEnt = &symbEntries[symbIndex];
 			char* localSymbName = &strTab.stStrs[localSymbEnt->seSymbName];
 			int globalSymbIndex = getSymbolByName(globalTables->symbolTable, localSymbName, 0);
-			if (globalSymbIndex == -1 && SE_GET_LOC(localSymbEnt->seSymbInfo) != SE_LOCAL) emitError(ERR_INTERNAL, "Failed to find symbol %s in global symbol table while updating relocation entries", localSymbName);
-			// Local symbols are not in the global symbol table but may still be referenced in relocation entries
-			// Relocation handling will only occur in one place, so to mark as such, set to -1 (aka leave as is)
+			if (globalSymbIndex == -1) emitError(ERR_INTERNAL, "Failed to find symbol %s in global symbol table while updating relocation entries", localSymbName);
 
 			log("Updating relocation entry %d's symbol index from %d (local) to %d (global) for symbol %s", j, symbIndex, globalSymbIndex, localSymbName);
 			globalTables->relocTable->trelocs.tables[globalTables->relocTable->trelocs.count - 1].relEntries[j].reSymb = (uint8_t) globalSymbIndex;
