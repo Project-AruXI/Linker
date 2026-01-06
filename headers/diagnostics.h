@@ -11,6 +11,7 @@
 #define WHITE "\033[37m"
 
 typedef enum {
+	ERR_OTHER,
 	ERR_INTERNAL,
 	ERR_MEM,
 	ERR_IO,

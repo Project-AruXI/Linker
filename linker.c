@@ -83,7 +83,7 @@ static const char** parseArgs(int argc, char const* argv[]) {
 
 	// Check flag compatibility
 	if (config.isKernel && config.isDynamic) {
-		emitError(ERR_INVALID_FORMAT, NULL, "Cannot build a kernel binary as a dynamic library.");
+		emitError(ERR_OTHER, "Cannot build a kernel binary as a dynamic library.");
 	}
 
 	// Remaining arguments after options are input files

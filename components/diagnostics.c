@@ -9,6 +9,7 @@ static char FN_SCOPE[64];
 static char buffer[164];
 
 static char* errnames[ERR_TOO_MANY_LIBS + 1] = {
+	"ERROR",
 	"INTERNAL ERROR",
 	"MEMORY ERROR",
 	"I/O ERROR",
