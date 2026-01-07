@@ -125,7 +125,7 @@ uint32_t appendString(SymbolTable* symbTable, const char* str) {
 	char* strs = symbTable->SymbolStringTable.strTab.stStrs;
 
 	size_t len = strlen(str) + 1; // +1 for null terminator
-	if (symbTable->SymbolStringTable.strbCount + len == symbTable->SymbolStringTable.strbCap) {
+	if (symbTable->SymbolStringTable.strbCount + len >= symbTable->SymbolStringTable.strbCap) {
 		symbTable->SymbolStringTable.strbCap *= 2;
 
 		strs = (char*) realloc(strs,  sizeof(char) * symbTable->SymbolStringTable.strbCap);

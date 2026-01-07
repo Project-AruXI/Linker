@@ -31,6 +31,8 @@ static uint32_t getTRelTabSize(AOEFFTRelTab* relocTables, uint32_t relTabCount) 
 }
 
 static uint32_t getEntrySymbolAddress(SymbolTable* symbTable, Config* config) {
+	if (config->isDynamic || config->isKernel) return 0x00000000; // Dynamic libraries and kernels do not have entry points
+
 	char* entrySymbolName = NULL;
 	if (config->useStdLib) entrySymbolName = "main";
 	else entrySymbolName = "_init";
