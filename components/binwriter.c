@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <limits.h>
+#include <unistd.h>
 
 #include "binwriter.h"
 #include "aoef.h"
@@ -103,8 +107,33 @@ static AOEFFSymEnt* normalizeSymbolTable(SymbolTable* symbTable) {
 void writeBinary(Config* config, GlobalTables* globalTables) {
 	initScope("writeBinary");
 
+	// The outfile may contain directories
+	// Make sure they exist, if they don't, create them
+	if (config->outfile) {
+		char* dirpath = strdup(config->outfile);
+		if (!dirpath) emitError(ERR_MEM, "Failed to allocate memory while preparing output path.");
+
+		char* lastSlash = strrchr(dirpath, '/');
+		if (lastSlash) {
+			*lastSlash = '\0';
+
+			// Create each intermediate directory
+			for (char* p = dirpath + 1; *p; p++) {
+				if (*p == '/') {
+					*p = '\0';
+					if (mkdir(dirpath, 0755) != 0 && errno != EEXIST) emitError(ERR_IO, "Failed to create directory %s: %s", dirpath, strerror(errno));
+					*p = '/';
+				}
+			}
+
+			// Create the final directory
+			if (mkdir(dirpath, 0755) != 0 && errno != EEXIST) emitError(ERR_IO, "Failed to create directory %s: %s", dirpath, strerror(errno));
+		}
+		free(dirpath);
+	}
+
 	FILE* outfile = fopen(config->outfile, "wb");
-	if (!outfile) emitError(ERR_IO, NULL, "Failed to open output file %s for writing.", config->outfile);
+	if (!outfile) emitError(ERR_IO, "Failed to open output file %s for writing.", config->outfile);
 
 	int sectEntries = 0;
 	for (int i = 0; i < 4; i++) {
