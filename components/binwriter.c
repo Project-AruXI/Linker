@@ -53,7 +53,7 @@ AOEFFSectHdr* normalizeSectionHeaders(SectionTable* sectTable, uint32_t sectOff)
 	// Also adds a blank section header at the end
 
 	int sectCount = 0;
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < 5; i++) {
 		if (sectTable->sections[i].shSectSize != 0) sectCount++;
 	}
 	sectCount++; // For the blank ending entry
@@ -65,7 +65,7 @@ AOEFFSectHdr* normalizeSectionHeaders(SectionTable* sectTable, uint32_t sectOff)
 	uint32_t baseOffset = sectOff;
 	rlog("Base section for all section data: 0x%x", baseOffset);
 	uint32_t sectOffset = baseOffset;
-	for (int i = 0, hdrIdx = 0; i < 4; i++) {
+	for (int i = 0, hdrIdx = 0; i < 5; i++) {
 		if (sectTable->sections[i].shSectSize == 0) continue;
 
 		newSectHeaders[hdrIdx] = sectTable->sections[i];
@@ -136,7 +136,7 @@ void writeBinary(Config* config, GlobalTables* globalTables) {
 	if (!outfile) emitError(ERR_IO, "Failed to open output file %s for writing.", config->outfile);
 
 	int sectEntries = 0;
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < 5; i++) {
 		if (globalTables->sectionTable->sections[i].shSectSize != 0) sectEntries++;
 	}
 	sectEntries++; // Ending blank entry
@@ -241,7 +241,7 @@ void writeBinary(Config* config, GlobalTables* globalTables) {
 	// TODO: write dynamic library table, write import table
 
 	// Write payload
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < 5; i++) {
 		AOEFFSectHdr* sectHdr = &globalTables->sectionTable->sections[i];
 		if (sectHdr->shSectSize == 0) continue;
 
@@ -255,6 +255,9 @@ void writeBinary(Config* config, GlobalTables* globalTables) {
 		} else if (strcmp(sectHdr->shSectName, ".text") == 0) {
 			log("Writing .text section");
 			fwrite(globalTables->sectionTable->_text, sizeof(uint32_t), sectHdr->shSectSize / 4, outfile);
+		} else if (strcmp(sectHdr->shSectName, ".evt") == 0) {
+			log("Writing .evt section");
+			fwrite(globalTables->sectionTable->_evt, sizeof(uint8_t), sectHdr->shSectSize, outfile);
 		} else {
 			emitError(ERR_INTERNAL, NULL, "Writing section %s is not implemented yet.", sectHdr->shSectName);
 		}

@@ -166,6 +166,10 @@ int main(int argc, char const* argv[]) {
 		merge(infile, &globalTables);
 	}
 
+	if (globalTables.sectionTable->sections[4].shSectSize != 0 && !config.isKernel) {
+		emitError(ERR_INVALID_FORMAT, "Evt section found in non-kernel binary.");
+	}
+
 	displayRelocTable(globalTables.relocTable);
 	displaySymbolTable(globalTables.symbolTable);
 	displaySectionTable(globalTables.sectionTable);

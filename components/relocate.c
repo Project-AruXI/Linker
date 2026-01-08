@@ -113,6 +113,25 @@ static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymE
 			*lowLocation &= ~(0xF << 10); // Clear bits 10-13
 			*lowLocation |= (low4 << 10);
 			break;
+		case RE_ARU32_ABS8: // unsigned 8-bit relocation in bits 0-7
+			*location &= ~(0xFF); // Clear bits 0-7
+
+			newUnsignedData = (symbValue + relEntry->reAddend) & 0xFF;
+			rdetail("Computed new ABS8 data: 0x%X", newUnsignedData);
+			*location |= newUnsignedData;
+			break;
+		case RE_ARU32_ABS16: // unsigned 16-bit relocation in bits 0-15
+			*location &= ~(0xFFFF); // Clear bits 0-15
+
+			newUnsignedData = (symbValue + relEntry->reAddend) & 0xFFFF;
+			rdetail("Computed new ABS16 data: 0x%X", newUnsignedData);
+			*location |= newUnsignedData;
+			break;
+		case RE_ARU32_ABS32: // full 32-bit relocation
+			*location = symbValue + relEntry->reAddend;
+
+			rdetail("Computed new ABS32 data: 0x%X", *location);
+			break;
 		default:
 			emitError(ERR_INTERNAL, "Unsupported relocation type %d", relEntry->reType);
 			break;
@@ -158,6 +177,15 @@ void relocate(RelocTable* relocTable, SectionTable* sectTable, SymbolTable* symb
 				case RE_ARU32_DECOMP:
 					typeStr = "DECOMP";
 					break;
+				case RE_ARU32_ABS8:
+					typeStr = "ABS8";
+					break;
+				case RE_ARU32_ABS16:
+					typeStr = "ABS16";
+					break;
+				case RE_ARU32_ABS32:
+					typeStr = "ABS32";
+					break;
 				default:
 					typeStr = "UNKNOWN";
 					break;
@@ -166,15 +194,18 @@ void relocate(RelocTable* relocTable, SectionTable* sectTable, SymbolTable* symb
 			rtrace("%4d | 0x%06X |  %5d | %4s | 0x%04X |", j, entry->reOff, entry->reSymb, typeStr, entry->reAddend);
 
 			// For now, skip when symbol index is -1
-			if (entry->reSymb == (uint8_t)-1) {
-				rlog("Skipping relocation entry %d with symbol index -1", j);
-				continue;
-			}
+			// I don't think this is the case anymore
+			// if (entry->reSymb == (uint8_t)-1) {
+			// 	rlog("Skipping relocation entry %d with symbol index -1", j);
+			// 	continue;
+			// }
 
 			void* sectionData = NULL;
 			if (table->relSect == 0) sectionData = sectTable->_data;
 			else if (table->relSect == 1) sectionData = sectTable->_const;
 			else if (table->relSect == 3) sectionData = sectTable->_text;
+			else if (table->relSect == 4) sectionData = sectTable->_evt;
+			else emitError(ERR_INTERNAL, "Unsupported relocation section %d", table->relSect);
 
 			// Apply relocation
 
@@ -207,6 +238,9 @@ void relocate(RelocTable* relocTable, SectionTable* sectTable, SymbolTable* symb
 				sectOffset = symbolFilectx->textOffset;
 				rdetail("Symbol's file context section offset: textOffset=0x%X", symbolFilectx->textOffset);
 				rdetail("Resolved to 0x%X in text", sectOffset);
+			} else if (table->relSect == 4) { // .evt
+				sectOffset = 0x0; // Evt section starts at fixed address once
+				rdetail("Symbol's file context section offset: evt fixed offset=0x%X", sectOffset);
 			}
 			rdetail("Symbol's file context section offset: 0x%X", sectOffset);
 
@@ -224,6 +258,8 @@ void relocate(RelocTable* relocTable, SectionTable* sectTable, SymbolTable* symb
 			} else if (table->relSect == 3) { // .text
 				toRelOffset += relFilectx->textOffset;
 				rdetail("Relocation's file context text offset: 0x%X", relFilectx->textOffset);
+			} else if (table->relSect == 4) { // .evt
+				rdetail("Relocation's file context evt fixed offset: 0x%X", 0x0);
 			}
 			rdetail("Computed relocation global offset: 0x%X", toRelOffset);
 			// Update it again for it to be in accordance of the section starting point in the final binary

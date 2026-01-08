@@ -37,6 +37,8 @@ void updateSymbolAddressValue(AOEFFSymEnt* addedSymbol, const char* symName, Fil
 	if (addedSymbol->seSymbSect == 3) sectionGlobalOffset = filectx.textOffset;
 	else if (addedSymbol->seSymbSect == 0) sectionGlobalOffset = filectx.dataOffset;
 	else if (addedSymbol->seSymbSect == 1) sectionGlobalOffset = filectx.constOffset;
+	else if (addedSymbol->seSymbSect == 2) sectionGlobalOffset = 0; // BSS does not have a value to update
+	else if (addedSymbol->seSymbSect == 4) sectionGlobalOffset = 0x0; // Evt section fixed address
 	else emitError(ERR_INTERNAL, "Unsupported section index %d for symbol %s while updating symbol value", addedSymbol->seSymbSect, symName);
 
 	log("Updating symbol %s's value from 0x%X to 0x%X (section global offset 0x%X, original value 0x%X)", 
@@ -171,6 +173,32 @@ void merge(const char* infile, GlobalTables* globalTables) {
 			globalTables->sectionTable->_const = newGlobalConst;
 			// Copy over the new const section data
 			memcpy((uint8_t*) globalTables->sectionTable->_const + prevSizeSect, aobjConst, aobjConstSize);
+		} else if (sectHdr->shSectName[1] == 'b') { // .bss
+			// BSS section has no data to copy over
+			prevSizeSect = globalTables->sectionTable->sections[2].shSectSize;
+
+			appendSection(globalTables->sectionTable, sectHdr, NULL);
+		} else if (sectHdr->shSectName[1] == 'e') { // .evt
+			uint8_t* aobjEvt = (uint8_t*) _obj + sectionOffset;
+			uint32_t aobjEvtSize = sectionSize;
+
+			// Evt section does not have per-file offsets since it's kernel-only
+			// And since it can only exist once, the offset is always 0 and there is no "global" merging needed
+			appendSection(globalTables->sectionTable, sectHdr, aobjEvt);
+
+			uint8_t* evt = NULL;
+			if (!globalTables->sectionTable->_evt) {
+				trace("Allocating global evt section for the first time");
+				// First allocation
+				evt = (uint8_t*) malloc(aobjEvtSize);
+				if (!evt) emitError(ERR_MEM, "Failed to allocate memory for evt section");
+			} else {
+				// This means it was seen again, error
+				emitError(ERR_REDEFINED, "Evt section defined multiple times (in file %s)", infile);
+			}
+			globalTables->sectionTable->_evt = evt;
+			// Copy over the new evt section data
+			memcpy((uint8_t*) globalTables->sectionTable->_evt + prevSizeSect, aobjEvt, aobjEvtSize);
 		} else {
 			emitError(ERR_INVALID_FORMAT, "Unsupported section type in input file %s: %.8s", infile, sectHdr->shSectName);
 		}
@@ -183,7 +211,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 	// Also add strings to global string table
 
 	// Relocation entries reference symbol indices, so we need to update those as well after adding symbols
-	
+
 	// Get the start index of the newly added symbols to aid with updating relocation entries
 	// Specially, indicate where to start searching the symbol table in order to decrease search time
 	int startIndexOfSymbols = globalTables->symbolTable->count;
@@ -251,6 +279,9 @@ void merge(const char* infile, GlobalTables* globalTables) {
 					// Both are defined, error
 					emitError(ERR_REDEFINED, "Symbol %s is defined multiple times (in file %s)", symName, infile);
 				} else if (existingLoc == SE_LOCAL || newLoc == SE_LOCAL) {
+					// Note: there may be repetition of local absolute symbols with the same value
+					//   ie local constants defined in multiple files via .adecl or by hand
+					// For now, the repetition remains
 					trace("At least one of the symbols %s is local", symName);
 					// At least one is local, keep both for now
 					log("Keeping local symbol %s in the global symbol table for now", symName);
@@ -269,7 +300,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 		// In the case that the symbol is an address in a section, we need to update the symbol's value
 		// The old value is just an offset in the (local) section
 		// The new value is the global section's offset + the old value
-		if (SE_GET_TYPE(addedSymbol->seSymbInfo) != SE_NONE_T && addedSymbol->seSymbSect != SE_SECT_UNDEF) {
+		if (SE_GET_TYPE(addedSymbol->seSymbInfo) != SE_NONE_T || addedSymbol->seSymbSect != SE_SECT_UNDEF) {
 			updateSymbolAddressValue(addedSymbol, symName, filectx);
 
 			globalTables->symbolTable->filectxIndices[globalTables->symbolTable->count - 1] = filectxIndex;
@@ -280,8 +311,15 @@ void merge(const char* infile, GlobalTables* globalTables) {
 		}
 	}
 
+	uint32_t currTRelTabOffset = 0x0;
 	for (uint32_t i = 0; i < objHeader->hTRelTabSize; i++) {
-		AOEFFTRelTab* trelTab = &tRelTables[i];
+		uint8_t* temp = (uint8_t*) tRelTables;
+		AOEFFTRelTab* trelTab = (AOEFFTRelTab*)(temp + currTRelTabOffset);
+		currTRelTabOffset += (sizeof(AOEFFTRelTab) - 8) + (sizeof(AOEFFTRelEnt) * (trelTab->relCount));
+		// The above is needed because the relocation entries are variable-length arrays at the end of the relocation table struct
+		// Also, the entries start where, per the struct definition, relEntries is located at
+		// Since `sizeof(AOEFFTRelTab)` includes the 8 bytes for the pointer to relEntries, we need to subtract that out and add the actual size of the entries
+
 		char* relTabName = &relStrTab.rstStrs[trelTab->relTabName];
 
 		log("Relocation Table %d: sect=%d, nameIdx=%d (%s), entryCount=%d", i, trelTab->relSect, trelTab->relTabName, relTabName, trelTab->relCount);
