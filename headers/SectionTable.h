@@ -16,9 +16,9 @@ typedef struct FileContext {
  * A wrapper around the AOEFF section table structure.
  */
 typedef struct SectionTable {
-	AOEFFSectHdr sections[4]; // 0: .data; 1: .const; 2: .bss; 3: .text
+	AOEFFSectHdr sections[5]; // 0: .data; 1: .const; 2: .bss; 3: .text; 4: .evt;
 
-	uint32_t sectionOffsets[4]; // Offsets of each section in the memory
+	uint32_t sectionOffsets[5]; // Offsets of each section in the memory
 
 	struct {
 		FileCtx* ctx;
@@ -29,6 +29,7 @@ typedef struct SectionTable {
 	uint8_t* _data;
 	uint8_t* _const;
 	uint32_t* _text;
+	uint8_t* _evt;
 } SectionTable;
 
 typedef enum {

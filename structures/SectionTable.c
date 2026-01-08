@@ -24,10 +24,15 @@ SectionTable* initSectionTable(uint32_t dataStart, uint32_t constStart, uint32_t
 	sectTable->sections[3].shSectOff = 0;
 	sectTable->sections[3].shSectSize = 0;
 
+	strcpy(sectTable->sections[4].shSectName, ".evt"); // .evt
+	sectTable->sections[4].shSectOff = 0;
+	sectTable->sections[4].shSectSize = 0;
+
 	sectTable->sectionOffsets[0] = dataStart;
 	sectTable->sectionOffsets[1] = constStart;
 	sectTable->sectionOffsets[2] = bssStart;
 	sectTable->sectionOffsets[3] = textStart;
+	sectTable->sectionOffsets[4] = 0x00040000; // Evt has only one start address since it is kernel-only
 
 	sectTable->filectxs.ctx = (FileCtx*) malloc(sizeof(FileCtx) * 2);
 	if (!sectTable->filectxs.ctx) emitError(ERR_MEM, "Failed to allocate memory for file contexts");
@@ -37,6 +42,7 @@ SectionTable* initSectionTable(uint32_t dataStart, uint32_t constStart, uint32_t
 	sectTable->_data = NULL;
 	sectTable->_const = NULL;
 	sectTable->_text = NULL;
+	sectTable->_evt = NULL;
 
 	return sectTable;
 }
@@ -55,6 +61,8 @@ void appendSection(SectionTable* sectTable, AOEFFSectHdr* sectHdr, void*) {
 		targetSectHdr = &sectTable->sections[1];
 	} else if (sectHdr->shSectName[1] == 'b') { // .bss
 		targetSectHdr = &sectTable->sections[2];
+	} else if (sectHdr->shSectName[1] == 'e') { // .evt
+		targetSectHdr = &sectTable->sections[4];
 	} else {
 		emitError(ERR_INVALID_FORMAT, "Unsupported section type: %.8s", sectHdr->shSectName);
 	}
