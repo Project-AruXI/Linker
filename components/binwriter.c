@@ -35,16 +35,19 @@ static uint32_t getTRelTabSize(AOEFFTRelTab* relocTables, uint32_t relTabCount) 
 }
 
 static uint32_t getEntrySymbolAddress(SymbolTable* symbTable, Config* config) {
-	if (config->isDynamic || config->isKernel) return 0x00000000; // Dynamic libraries and kernels do not have entry points
+	if (config->isDynamic) return 0x00000000; // Dynamic libraries do not have entry points
 
 	char* entrySymbolName = NULL;
-	if (config->useStdLib) entrySymbolName = "main";
+	if (config->isKernel) {
+		entrySymbolName = "__onStart";
+	} else if (config->useStdLib) entrySymbolName = "main";
 	else entrySymbolName = "_init";
 
 	int entrySymbIndex = getSymbolByName(symbTable, entrySymbolName, 0);
 	if (entrySymbIndex == -1) emitError(ERR_UNDEFINED, "Entry point symbol %s is undefined", entrySymbolName);
 
 	AOEFFSymEnt* entrySymb = &symbTable->symbols[entrySymbIndex];
+
 	return entrySymb->seSymbVal;
 }
 
@@ -173,7 +176,7 @@ void writeBinary(Config* config, GlobalTables* globalTables) {
 	// Write header info
 	AOEFFhdr header = {
 		.hID = {AH_ID0, AH_ID1, AH_ID2, AH_ID3},
-		.hType = AHT_EXEC, // For now, make it be exe, implement other types later
+		.hType = config->isDynamic ? AHT_DLIB : (config->isKernel ? AHT_KERN : AHT_EXEC),
 		.hEntry = getEntrySymbolAddress(globalTables->symbolTable, config),
 		.hSectOff = sizeof(AOEFFhdr),
 		.hSectSize = sectEntries,
@@ -243,7 +246,7 @@ void writeBinary(Config* config, GlobalTables* globalTables) {
 	// Write payload
 	for (int i = 0; i < 5; i++) {
 		AOEFFSectHdr* sectHdr = &globalTables->sectionTable->sections[i];
-		if (sectHdr->shSectSize == 0) continue;
+		if (sectHdr->shSectSize == 0 || sectHdr->shSectName[1] == 'b') continue;
 
 		rlog("Writing section %s at offset 0x%x, size 0x%x", sectHdr->shSectName, sectHdr->shSectOff, sectHdr->shSectSize);
 		if (strcmp(sectHdr->shSectName, ".data") == 0) {

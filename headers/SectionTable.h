@@ -9,6 +9,7 @@ typedef struct FileContext {
 	uint32_t textOffset; // The offset where this file's text section starts in the merged text section
 	uint32_t dataOffset; // The offset where this file's data section starts in the merged data section
 	uint32_t constOffset; // The offset where this file's const section starts in the merged const section
+	uint32_t bssOffset; // The offset where this file's bss section starts in the merged bss section
 } FileCtx;
 
 

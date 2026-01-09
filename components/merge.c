@@ -31,13 +31,13 @@ static void* mapObjectFile(const char* path) {
 }
 
 
-void updateSymbolAddressValue(AOEFFSymEnt* addedSymbol, const char* symName, FileCtx filectx) {
+void updateSymbolAddressValue(AOEFFSymEnt* addedSymbol, const char* symName, FileCtx filectx, uint32_t memOffsets[5]) {
 	// Get the section's global offset
 	uint32_t sectionGlobalOffset = 0;
-	if (addedSymbol->seSymbSect == 3) sectionGlobalOffset = filectx.textOffset;
-	else if (addedSymbol->seSymbSect == 0) sectionGlobalOffset = filectx.dataOffset;
-	else if (addedSymbol->seSymbSect == 1) sectionGlobalOffset = filectx.constOffset;
-	else if (addedSymbol->seSymbSect == 2) sectionGlobalOffset = 0; // BSS does not have a value to update
+	if (addedSymbol->seSymbSect == 3) sectionGlobalOffset = filectx.textOffset + memOffsets[3];
+	else if (addedSymbol->seSymbSect == 0) sectionGlobalOffset = filectx.dataOffset + memOffsets[0];
+	else if (addedSymbol->seSymbSect == 1) sectionGlobalOffset = filectx.constOffset + memOffsets[1];
+	else if (addedSymbol->seSymbSect == 2) sectionGlobalOffset = filectx.bssOffset + memOffsets[2]; // BSS section starts at its memory offset
 	else if (addedSymbol->seSymbSect == 4) sectionGlobalOffset = 0x0; // Evt section fixed address
 	else emitError(ERR_INTERNAL, "Unsupported section index %d for symbol %s while updating symbol value", addedSymbol->seSymbSect, symName);
 
@@ -76,7 +76,8 @@ void merge(const char* infile, GlobalTables* globalTables) {
 		.filename = strdup(infile),
 		.textOffset = 0x0,
 		.dataOffset = 0x0,
-		.constOffset = 0x0
+		.constOffset = 0x0,
+		.bssOffset = 0x0
 	};
 
 	// Get the sections themselves
@@ -174,10 +175,17 @@ void merge(const char* infile, GlobalTables* globalTables) {
 			// Copy over the new const section data
 			memcpy((uint8_t*) globalTables->sectionTable->_const + prevSizeSect, aobjConst, aobjConstSize);
 		} else if (sectHdr->shSectName[1] == 'b') { // .bss
+			uint32_t aobjBssSize = sectionSize; // Just the size, it does not have any data present in binary
+
 			// BSS section has no data to copy over
 			prevSizeSect = globalTables->sectionTable->sections[2].shSectSize;
 
 			appendSection(globalTables->sectionTable, sectHdr, NULL);
+
+			uint32_t newGlobalBssSize = prevSizeSect + sectHdr->shSectSize;
+			// The new file context's bss offset is the previous global bss size
+			filectx.bssOffset = prevSizeSect;
+			log("Updated file context bss offset to 0x%X", filectx.bssOffset);
 		} else if (sectHdr->shSectName[1] == 'e') { // .evt
 			uint8_t* aobjEvt = (uint8_t*) _obj + sectionOffset;
 			uint32_t aobjEvtSize = sectionSize;
@@ -256,7 +264,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 					existingSymEntry->seSymbInfo = symbEnt->seSymbInfo;
 					existingSymEntry->seSymbSect = symbEnt->seSymbSect;
 					existingSymEntry->seSymbVal = symbEnt->seSymbVal;
-					updateSymbolAddressValue(existingSymEntry, symName, filectx);
+					updateSymbolAddressValue(existingSymEntry, symName, filectx, globalTables->sectionTable->sectionOffsets);
 					existingSymEntry->seSymbSize = symbEnt->seSymbSize;
 					globalTables->symbolTable->filectxIndices[symbIndexInGlobal] = filectxIndex;
 					continue;
@@ -301,7 +309,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 		// The old value is just an offset in the (local) section
 		// The new value is the global section's offset + the old value
 		if (SE_GET_TYPE(addedSymbol->seSymbInfo) != SE_NONE_T || addedSymbol->seSymbSect != SE_SECT_UNDEF) {
-			updateSymbolAddressValue(addedSymbol, symName, filectx);
+			updateSymbolAddressValue(addedSymbol, symName, filectx, globalTables->sectionTable->sectionOffsets);
 
 			globalTables->symbolTable->filectxIndices[globalTables->symbolTable->count - 1] = filectxIndex;
 		} else {
