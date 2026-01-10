@@ -5,7 +5,7 @@
 #include "argparse.h"
 #include "diagnostics.h"
 #include "config.h"
-#include "dylink.h"
+#include "dylib.h"
 #include "merge.h"
 #include "relocate.h"
 #include "binwriter.h"
@@ -87,7 +87,7 @@ static const char** parseArgs(int argc, char const* argv[]) {
 	}
 
 	// Remaining arguments after options are input files
-	if (argc - nparsed < 1) {
+	if (argc - nparsed <= 1) {
 		fprintf(stderr, "No input file specified.\n");
 		argparse_usage(&argparse);
 		exit(-1);
@@ -116,26 +116,17 @@ int main(int argc, char const* argv[]) {
 		rlog("%s", infiles[i]);
 	}
 
-	// for (int i = 0; config.libs[i] != NULL; i++) {
-	// 	rlog("Linking against library: %s", config.libs[i]);
-	// }
+	for (int i = 0; config.libs[i] != NULL; i++) {
+		rlog("Linking against library: %s", config.libs[i]);
+	}
 
-	// for (int i = 0; config.libpath[i] != NULL; i++) {
-	// 	rlog("Library search path: %s", config.libpath[i]);
-	// }
+	for (int i = 0; config.libpath[i] != NULL; i++) {
+		rlog("Library search path: %s", config.libpath[i]);
+	}
 
 	// Validate that the linked libraries exists
-	// ...
-
-	// Plan to combine files:
-	// Have a global everything
-	// Go through each input file
-	//   For each input file, read its sections and symbols
-	//   Add its components to the global ones, adjust addresses as necessary
-	//     Resolve relocations as necessary
-	//     Ensure no symbol conflicts
-	// Look up any library dependencies from the input files and check symbols
-	// Write final binary
+	 DynamicLibraries* dyLibTable = verifyLibraries(&config);
+	 displayDynamicLibraries(dyLibTable);
 
 	uint32_t dataStart = 0x0;
 	uint32_t constStart = 0x0;
@@ -174,29 +165,32 @@ int main(int argc, char const* argv[]) {
 	displaySymbolTable(globalTables.symbolTable);
 	displaySectionTable(globalTables.sectionTable);
 
-	// At this point, symbol tables have been merged (global only), section tables have been merged,
+	// At this point, symbol tables have been merged, section tables have been merged,
 	//   relocation tables have been merged, and contents (text and data) have been merged
 	// Relocations are now to be made
 
 	relocate(globalTables.relocTable, globalTables.sectionTable, globalTables.symbolTable);
 
+	struct ImportsExports importsExports;
+	// Any remaining unresolved symbols/relocations are to be from dynamic libraries
+	// Verify that is true (check all leftover symbols are found in the linked libraries)
+	initImports(&importsExports);
+	importSymbols(globalTables.symbolTable, globalTables.relocTable, dyLibTable, &importsExports);
+
+	JumpTables* jumpTables = createJumpTables(globalTables.relocTable, globalTables.symbolTable, globalTables.sectionTable);
 
 	// globalTables.symbolTable = dropLocalSymbols(globalTables.symbolTable);
 	// globalTables.relocTable = dropStaticReloc(globalTables.relocTable, globalTables.symbolTable);
 
-	
-	// All unresolved symbols at this point should be unresolved due to them being in dynamic libraries
-	// The dynamic library table will hold the libraries actually used and the symbols that "imported"
+	initExports(&importsExports);
+	if (config.isDynamic) exportSymbols(globalTables.symbolTable, &importsExports);
 
-	// DyLibTable* dyLibTable = dynLibBuild(globalSymTable, config.libpath, config.libs);
-	// showDyLibTable(dyLibTable);
 
-	writeBinary(&config, &globalTables);
+	writeBinary(&config, &globalTables, &importsExports, jumpTables, dyLibTable);
 
 
 
 	// deinitSymbolTable(globalSymTable);
-	// deinitDyLibTable(dyLibTable);
 	free(infiles);
 
 	return 0;

@@ -34,6 +34,24 @@ static uint32_t getTRelTabSize(AOEFFTRelTab* relocTables, uint32_t relTabCount) 
 	return totalSize;
 }
 
+static uint32_t getDRelTabSize(AOEFFDRelTab* relocTables, uint32_t relTabCount) {
+	// Similar to static relocation tables, but with dynamic relocation entries
+
+	uint32_t totalSize = 0;
+
+	for (uint32_t i = 0; i < relTabCount; i++) {
+		AOEFFDRelTab* tab = &relocTables[i];
+		totalSize += sizeof(uint8_t); // relSect
+		totalSize += 3; // padding
+		totalSize += sizeof(uint32_t); // relTabName
+		totalSize += sizeof(uint32_t); // relCount
+		totalSize += 4; // padding
+		totalSize += sizeof(AOEFFDRelEnt) * tab->relCount; // relEntries
+	}
+
+	return totalSize;
+}
+
 static uint32_t getEntrySymbolAddress(SymbolTable* symbTable, Config* config) {
 	if (config->isDynamic) return 0x00000000; // Dynamic libraries do not have entry points
 
@@ -51,7 +69,7 @@ static uint32_t getEntrySymbolAddress(SymbolTable* symbTable, Config* config) {
 	return entrySymb->seSymbVal;
 }
 
-AOEFFSectHdr* normalizeSectionHeaders(SectionTable* sectTable, uint32_t sectOff) {
+static AOEFFSectHdr* normalizeSectionHeaders(SectionTable* sectTable, JumpTables* jumpTables, uint32_t sectOff) {
 	// Updates the offset fields of the section headers to reflect their actual offsets in the final binary
 	// Also adds a blank section header at the end
 
@@ -59,16 +77,19 @@ AOEFFSectHdr* normalizeSectionHeaders(SectionTable* sectTable, uint32_t sectOff)
 	for (int i = 0; i < 5; i++) {
 		if (sectTable->sections[i].shSectSize != 0) sectCount++;
 	}
+	if (jumpTables->fjt.fjtEntryCount != 0) sectCount++; // For .text.fjt
+	if (jumpTables->djt.djtEntryCount != 0) sectCount++; // For .data.djt
 	sectCount++; // For the blank ending entry
 
 	AOEFFSectHdr* newSectHeaders = (AOEFFSectHdr*) calloc(sectCount, sizeof(AOEFFSectHdr));
-	if (!newSectHeaders) emitError(ERR_MEM, NULL, "Failed to allocate memory for normalized section headers.");
+	if (!newSectHeaders) emitError(ERR_MEM, "Failed to allocate memory for normalized section headers.");
 
 	// Offset where all sections start at, basically the end of the dynamic relocation tables
 	uint32_t baseOffset = sectOff;
 	rlog("Base section for all section data: 0x%x", baseOffset);
 	uint32_t sectOffset = baseOffset;
-	for (int i = 0, hdrIdx = 0; i < 5; i++) {
+	int hdrIdx = 0;
+	for (int i = 0; i < 5; i++) {
 		if (sectTable->sections[i].shSectSize == 0) continue;
 
 		newSectHeaders[hdrIdx] = sectTable->sections[i];
@@ -79,6 +100,32 @@ AOEFFSectHdr* normalizeSectionHeaders(SectionTable* sectTable, uint32_t sectOff)
 		log("Section %s: Offset 0x%x, Size 0x%x", newSectHeaders[hdrIdx].shSectName, newSectHeaders[hdrIdx].shSectOff, newSectHeaders[hdrIdx].shSectSize);
 
 		if (i != 2) sectOffset += newSectHeaders[hdrIdx].shSectSize;
+		hdrIdx++;
+	}
+
+	// Add .text.fjt section if there are function jump table entries
+	if (jumpTables->fjt.fjtEntryCount != 0) {
+		AOEFFSectHdr* fjtHdr = &newSectHeaders[hdrIdx];
+		memcpy(fjtHdr->shSectName, ".fjt", 8);
+		fjtHdr->shSectOff = sectOffset;
+		fjtHdr->shSectSize = jumpTables->fjt.fjtEntryCount * (7 * 4); // Each entry is 7 instructions of 4 bytes each
+
+		log("Section %s: Offset 0x%x, Size 0x%x", fjtHdr->shSectName, fjtHdr->shSectOff, fjtHdr->shSectSize);
+
+		sectOffset += fjtHdr->shSectSize;
+		hdrIdx++;
+	}
+
+	// Add .data.djt section if there are data jump table entries
+	if (jumpTables->djt.djtEntryCount != 0) {
+		AOEFFSectHdr* djtHdr = &newSectHeaders[hdrIdx];
+		memcpy(djtHdr->shSectName, ".djt", 8);
+		djtHdr->shSectOff = sectOffset;
+		djtHdr->shSectSize = jumpTables->djt.djtEntryCount * 4; // Each entry is 4 bytes
+
+		log("Section %s: Offset 0x%x, Size 0x%x", djtHdr->shSectName, djtHdr->shSectOff, djtHdr->shSectSize);
+
+		sectOffset += djtHdr->shSectSize;
 		hdrIdx++;
 	}
 
@@ -107,7 +154,35 @@ static AOEFFSymEnt* normalizeSymbolTable(SymbolTable* symbTable) {
 	return newSymbEntries;
 }
 
-void writeBinary(Config* config, GlobalTables* globalTables) {
+static AOEFFDyLibEnt* createDynamicLibraryTable(DynamicLibraries* dyLibTable, AOEFFDyStrTab* dyLibStrTab, uint32_t* outStrTabSize) {
+	AOEFFDyLibEnt* dylibEntries = (AOEFFDyLibEnt*) calloc(dyLibTable->count, sizeof(AOEFFDyLibEnt));
+	if (!dylibEntries) emitError(ERR_MEM, NULL, "Failed to allocate memory for dynamic library table.");
+
+	uint32_t strbCount = 0;
+	for (uint32_t i = 0; i < dyLibTable->count; i++) {
+		DyLibEntry* libEntry = &dyLibTable->libs[i];
+		AOEFFDyLibEnt* dylibEntry = &dylibEntries[i];
+
+		// Add library name to string table
+		uint32_t nameIdx = strbCount;
+		size_t nameLen = strlen(libEntry->dlName) + 1; // +1 for null-terminator
+
+		dyLibStrTab->dlstStrs = (char*) realloc(dyLibStrTab->dlstStrs, strbCount + nameLen);
+		if (!dyLibStrTab->dlstStrs) emitError(ERR_MEM, NULL, "Failed to allocate memory for dynamic library string table.");
+
+		memcpy(&dyLibStrTab->dlstStrs[strbCount], libEntry->dlName, nameLen);
+		strbCount += nameLen;
+
+		dylibEntry->dlName = nameIdx;
+		dylibEntry->dlVersion = 0b000000000000; // For now, versioning is not implemented
+	}
+
+	*outStrTabSize = strbCount;
+
+	return dylibEntries;
+}
+
+void writeBinary(Config* config, GlobalTables* globalTables, struct ImportsExports* importsExports, JumpTables* jumpTables, DynamicLibraries* dyLibTable) {
 	initScope("writeBinary");
 
 	// The outfile may contain directories
@@ -142,6 +217,8 @@ void writeBinary(Config* config, GlobalTables* globalTables) {
 	for (int i = 0; i < 5; i++) {
 		if (globalTables->sectionTable->sections[i].shSectSize != 0) sectEntries++;
 	}
+	if (jumpTables->fjt.fjtEntryCount != 0) sectEntries++; // For .text.fjt
+	if (jumpTables->djt.djtEntryCount != 0) sectEntries++; // For .data.djt
 	sectEntries++; // Ending blank entry
 
 	uint32_t symbTableSize = globalTables->symbolTable->count;
@@ -154,8 +231,7 @@ void writeBinary(Config* config, GlobalTables* globalTables) {
 	strTabSize += 16; // Ending string is 16 bytes
 
 	uint32_t relStrOff = strTabOff + strTabSize;
-	// uint32_t relStrSize = globalTables->relocTable->RelocStringTable.strbCount;
-	uint32_t relStrSize = 0;
+	uint32_t relStrSize = globalTables->relocTable->RelocStringTable.strbCount;
 
 	// uint32_t trelTabCount = globalTables->relocTable->trelocs.count;
 	// uint32_t trelTabOff = relStrOff + relStrSize;
@@ -166,12 +242,27 @@ void writeBinary(Config* config, GlobalTables* globalTables) {
 
 	uint32_t drelTabCount = globalTables->relocTable->drelocs.count;
 	uint32_t drelTabOff = trelTabOff + trelTabSize;
-	uint32_t drelTabSize = 0; // TODO: implement dynamic relocation table
-
-	// TODO: Dynamic library table info
-
+	uint32_t drelTabSize = getDRelTabSize(globalTables->relocTable->drelocs.tables, drelTabCount);
+	
 	rlog("trelTabOff: 0x%x; trelTabSize: 0x%x", trelTabOff, trelTabSize);
-	// rlog("drelTabOff: 0x%x; drelTabSize: 0x%x", drelTabOff, drelTabSize);
+	rlog("drelTabOff: 0x%x; drelTabSize: 0x%x", drelTabOff, drelTabSize);
+
+	AOEFFDyStrTab dyLibStrTab = {
+		.dlstStrs = NULL
+	};
+	uint32_t dyLibStrTabSize = 0;
+	AOEFFDyLibEnt* dylibTable = createDynamicLibraryTable(dyLibTable, &dyLibStrTab, &dyLibStrTabSize);
+	uint32_t dylibTableOff = drelTabOff + drelTabSize;
+	uint32_t dylibTableSize = dyLibTable->count * sizeof(AOEFFDyLibEnt);
+	uint32_t dyLibStrTabOff = dylibTableOff + dylibTableSize;
+
+	uint32_t importTableOff = dyLibStrTabOff + dyLibStrTabSize;
+	uint32_t importTableSize = importsExports->Imports.count * sizeof(AOEFFImportEnt);
+
+	uint32_t exportTableOff = drelTabOff + drelTabSize;
+	uint32_t exportTableSize = 0;
+	if (config->isDynamic) exportTableSize = importsExports->Exports.count * sizeof(AOEFFExportEnt);
+
 
 	// Write header info
 	AOEFFhdr header = {
@@ -190,19 +281,20 @@ void writeBinary(Config* config, GlobalTables* globalTables) {
 		.hTRelTabSize = trelTabCount,
 		.hDRelTabOff = drelTabOff,
 		.hDRelTabSize = drelTabCount,
-		.hDyLibTabOff = 0, // TODO: implement dynamic stuff
-		.hDyLibTabSize = 0,
-		.hDyLibStrTabOff = 0,
-		.hDyLibStrTabSize = 0,
-		.hImportTabOff = 0,
-		.hImportTabSize = 0
+		.hDyLibTabOff = dylibTableOff,
+		.hDyLibTabSize = dylibTableSize,
+		.hDyLibStrTabOff = dyLibStrTabOff,
+		.hDyLibStrTabSize = dyLibStrTabSize,
+		.hImportTabOff = importTableOff,
+		.hImportTabSize = importTableSize,
+		.hExportTabOff = exportTableOff,
+		.hExportTabSize = exportTableSize
 	};
 	fwrite(&header, sizeof(AOEFFhdr), 1, outfile);
 
 	// Write section headers
-	AOEFFSectHdr* sectHeader = normalizeSectionHeaders(globalTables->sectionTable, drelTabOff + drelTabSize);
-	fwrite(sectHeader, sizeof(AOEFFSectHdr), sectEntries, outfile);
-	free(sectHeader);
+	AOEFFSectHdr* sectHeaders = normalizeSectionHeaders(globalTables->sectionTable, jumpTables, exportTableOff + exportTableSize);
+	fwrite(sectHeaders, sizeof(AOEFFSectHdr), sectEntries, outfile);
 
 	// Write symbol table
 	AOEFFSymEnt* symbEntries = normalizeSymbolTable(globalTables->symbolTable);
@@ -241,30 +333,55 @@ void writeBinary(Config* config, GlobalTables* globalTables) {
 		fwrite(tab->relEntries, sizeof(AOEFFDRelEnt), tab->relCount, outfile);
 	}
 
-	// TODO: write dynamic library table, write import table
+	// Write dynamic library table
+	for (uint32_t i = 0; i < dyLibTable->count; i++) {
+		AOEFFDyLibEnt* dylibEntry = &dylibTable[i];
+		rlog("Writing Dynamic Library Entry %d: nameIndex=%d, name=%s", i, dylibEntry->dlName, &dyLibStrTab.dlstStrs[dylibEntry->dlName]);
+		fwrite(dylibEntry, sizeof(AOEFFDyLibEnt), 1, outfile);
+	}
+
+	// Write dynamic library string table
+	fwrite(dyLibStrTab.dlstStrs, sizeof(char), dyLibStrTabSize, outfile);
+
+	// Write import table
+	for (uint32_t i = 0; i < importsExports->Imports.count; i++) {
+		AOEFFImportEnt* importEntry = &importsExports->Imports.entries[i];
+		rlog("Writing Import Entry %d: symbIndex=%d, symbName=%s", i, importEntry->ieSymb, &globalTables->symbolTable->SymbolStringTable.strTab.stStrs[importEntry->ieSymb]);
+		fwrite(importEntry, sizeof(AOEFFImportEnt), 1, outfile);
+	}
+
+	// Write export table
+	for (uint32_t i = 0; i < importsExports->Exports.count; i++) {
+		AOEFFExportEnt* exportEntry = &importsExports->Exports.entries[i];
+		rlog("Writing Export Entry %d: symbIndex=%d, symbName=%s", i, exportEntry->eeSymb, &globalTables->symbolTable->SymbolStringTable.strTab.stStrs[exportEntry->eeSymb]);
+		fwrite(exportEntry, sizeof(AOEFFExportEnt), 1, outfile);
+	}
 
 	// Write payload
-	for (int i = 0; i < 5; i++) {
-		AOEFFSectHdr* sectHdr = &globalTables->sectionTable->sections[i];
-		if (sectHdr->shSectSize == 0 || sectHdr->shSectName[1] == 'b') continue;
+	for (int i = 0; i < sectEntries; i++) {
+		AOEFFSectHdr sectHdr = sectHeaders[i];
+		if (sectHdr.shSectSize == 0 || sectHdr.shSectName[1] == 'b') continue;
 
-		rlog("Writing section %s at offset 0x%x, size 0x%x", sectHdr->shSectName, sectHdr->shSectOff, sectHdr->shSectSize);
-		if (strcmp(sectHdr->shSectName, ".data") == 0) {
-			log("Writing .data section");
-			fwrite(globalTables->sectionTable->_data, sizeof(uint8_t), sectHdr->shSectSize, outfile);
-		} else if (strcmp(sectHdr->shSectName, ".const") == 0) {
-			log("Writing .const section");
-			fwrite(globalTables->sectionTable->_const, sizeof(uint8_t), sectHdr->shSectSize, outfile);
-		} else if (strcmp(sectHdr->shSectName, ".text") == 0) {
-			log("Writing .text section");
-			fwrite(globalTables->sectionTable->_text, sizeof(uint32_t), sectHdr->shSectSize / 4, outfile);
-		} else if (strcmp(sectHdr->shSectName, ".evt") == 0) {
-			log("Writing .evt section");
-			fwrite(globalTables->sectionTable->_evt, sizeof(uint8_t), sectHdr->shSectSize, outfile);
+		rlog("Writing section %s at offset 0x%x, size 0x%x", sectHdr.shSectName, sectHdr.shSectOff, sectHdr.shSectSize);
+		rtrace("Writing at file offset 0x%x", ftell(outfile));
+		if (strcmp(sectHdr.shSectName, ".data") == 0) {
+			fwrite(globalTables->sectionTable->_data, sizeof(uint8_t), sectHdr.shSectSize, outfile);
+		} else if (strcmp(sectHdr.shSectName, ".const") == 0) {
+			fwrite(globalTables->sectionTable->_const, sizeof(uint8_t), sectHdr.shSectSize, outfile);
+		} else if (strcmp(sectHdr.shSectName, ".text") == 0) {
+			fwrite(globalTables->sectionTable->_text, sizeof(uint32_t), sectHdr.shSectSize / 4, outfile);
+		} else if (strcmp(sectHdr.shSectName, ".evt") == 0) {
+			fwrite(globalTables->sectionTable->_evt, sizeof(uint8_t), sectHdr.shSectSize, outfile);
+		} else if (strcmp(sectHdr.shSectName, ".fjt") == 0) {
+			fwrite(jumpTables->fjt._fjt, sizeof(uint32_t), jumpTables->fjt.fjtEntryCount * 7, outfile);
+		} else if (strcmp(sectHdr.shSectName, ".djt") == 0) {
+			fwrite(jumpTables->djt._djt, sizeof(uint32_t), jumpTables->djt.djtEntryCount, outfile);
 		} else {
-			emitError(ERR_INTERNAL, NULL, "Writing section %s is not implemented yet.", sectHdr->shSectName);
+			emitError(ERR_INTERNAL, "Writing section %s is not implemented yet.", sectHdr.shSectName);
 		}
 	}
+	rtrace("Ended file writing at 0x%x", ftell(outfile));
+	free(sectHeaders);
 
 	fclose(outfile);
 }

@@ -21,12 +21,16 @@ typedef struct RelocTable {
 		// That symbol has its file context index, which refers to the file it is defined at
 	} trelocs;
 
+	// For "quick" lookups on static relocations for unresolved symbols that are potentially in dynamic libraries
 	struct {
-		AOEFFDRelTab* tables;
+		int** unresolvedIndices; // 2-element array indices of relocations with undefined symbols, first is table index, second is entry index
 		int count;
 		int cap;
+	} unresolved;
 
-		int* filectxIndices; // Indices of the file contexts each dynamic relocation table belongs to
+	struct {
+		AOEFFDRelTab tables[2]; // Two tables for fjt and djt
+		int count;
 	} drelocs;
 
 	struct {
@@ -42,8 +46,18 @@ typedef struct RelocTable {
 RelocTable* initRelocTable();
 void deinitRelocTable(RelocTable* relocTable);
 
+AOEFFDRelTab* initDRelocTable(uint8_t sect, uint32_t nameIndex);
+void deinitDRelocTable(AOEFFDRelTab* drelocTable);
+
+AOEFFDRelEnt* initDRelocEntry(uint32_t off, uint32_t symb, uint8_t type, int32_t addend);
+void deinitDRelocEntry(AOEFFDRelEnt* drelocEntry);
+
+void appendDRelocEntry(AOEFFDRelTab* drelocTable, AOEFFDRelEnt* drelocEntry);
+
 void appendTRelocTable(RelocTable* relocTable, AOEFFTRelTab* treloc, int filectxIndex);
 void appendDRelocTable(RelocTable* relocTable, AOEFFDRelTab* dreloc);
+
+void addUnresolved(RelocTable* relocTable, int relocTableIndex, int relocEntryIndex);
 
 void displayRelocTable(RelocTable* relocTable);
 

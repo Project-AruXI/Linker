@@ -36,10 +36,10 @@ typedef struct SectionTable {
 typedef enum {
 	SECT_DATA,
 	SECT_CONST,
+	SECT_BSS,
 	SECT_TEXT,
 	SECT_EVT,
-	SECT_IVT,
-	SECT_BSS
+	SECT_IVT
 } SectionType;
 
 

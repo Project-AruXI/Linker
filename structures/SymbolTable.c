@@ -19,14 +19,6 @@ SymbolTable* initSymbolTable() {
 	if (!symbTable->filectxIndices) emitError(ERR_MEM, "Failed to allocate memory for symbol table file context indices");
 
 
-	uint32_t* unresolvedIndices = (uint32_t*) malloc(sizeof(uint32_t) * 10);
-	if (!unresolvedIndices) emitError(ERR_MEM, "Failed to allocate memory for unresolved symbol indices");
-
-	symbTable->unresolved.unresolvedIndices = unresolvedIndices;
-	symbTable->unresolved.count = 0;
-	symbTable->unresolved.cap = 10;
-
-
 	char* strTabData = (char*) malloc(sizeof(char) * 50);
 	if (!strTabData) emitError(ERR_MEM, "Failed to allocate memory for symbol string table");
 
@@ -41,7 +33,6 @@ SymbolTable* initSymbolTable() {
 void deinitSymbolTable(SymbolTable* symbTable) {
 	free(symbTable->symbols);
 	free(symbTable->SymbolStringTable.strTab.stStrs);
-	free(symbTable->unresolved.unresolvedIndices);
 	free(symbTable);
 }
 

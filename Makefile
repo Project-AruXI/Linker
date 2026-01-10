@@ -8,8 +8,9 @@ HEADERS = ./headers
 
 INCLUDES = -I$(HEADERS) -I$(COMMON)
 
-SRCS = linker.c $(COMP)/merge.c $(COMP)/diagnostics.c $(COMP)/dylink.c $(COMP)/relocate.c $(COMP)/binwriter.c \
-	$(STRUCTS)/DyLibTable.c $(STRUCTS)/SymbolTable.c $(STRUCTS)/SectionTable.c $(STRUCTS)/RelocTable.c
+SRCS = linker.c $(COMP)/merge.c $(COMP)/diagnostics.c $(COMP)/relocate.c $(COMP)/binwriter.c \
+	$(COMP)/import.c $(COMP)/export.c $(COMP)/jumptable-reloc.c \
+	$(STRUCTS)/SymbolTable.c $(STRUCTS)/SectionTable.c $(STRUCTS)/RelocTable.c
 LIBS = $(COMMON)/libargparse.a $(COMMON)/libsds.a
 TARGET = $(OUT)/arxlnk
 

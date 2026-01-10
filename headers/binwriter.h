@@ -3,7 +3,9 @@
 
 #include "globals.h"
 #include "config.h"
+#include "dylib.h"
 
-void writeBinary(Config* config, GlobalTables* globalTables);
+
+void writeBinary(Config* config, GlobalTables* globalTables, struct ImportsExports* importsExports, JumpTables* jumpTables, DynamicLibraries* dyLibTable);
 
 #endif

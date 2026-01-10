@@ -15,13 +15,6 @@ typedef struct SymbolTable {
 	uint32_t count;
 	uint32_t cap;
 
-	// For "quick" lookups on unresolved symbols that are potentially in dynamic libraries
-	struct {
-		uint32_t* unresolvedIndices;
-		int count;
-		int cap;
-	} unresolved;
-
 	struct {
 		AOEFFStrTab strTab;
 		uint32_t strbCount; // The number of bytes used in the string table

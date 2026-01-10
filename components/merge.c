@@ -27,7 +27,7 @@ static void* mapObjectFile(const char* path) {
 	}
 	close(fd);
 
-	return ptr;	
+	return ptr;
 }
 
 

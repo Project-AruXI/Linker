@@ -19,14 +19,15 @@ RelocTable* initRelocTable() {
 	if (!relocTable->trelocs.filectxIndices) emitError(ERR_MEM, "Failed to allocate memory for static relocation table file context indices");
 
 
-	relocTable->drelocs.tables = (AOEFFDRelTab*) malloc(sizeof(AOEFFDRelTab) * 10);
-	if (!relocTable->drelocs.tables) emitError(ERR_MEM, "Failed to allocate memory for dynamic relocation tables");
+	int** unresolvedIndices = (int**) malloc(sizeof(int*) * 10);
+	if (!unresolvedIndices) emitError(ERR_MEM, "Failed to allocate memory for unresolved relocation indices");
+
+	relocTable->unresolved.unresolvedIndices = unresolvedIndices;
+	relocTable->unresolved.count = 0;
+	relocTable->unresolved.cap = 10;
+
 
 	relocTable->drelocs.count = 0;
-	relocTable->drelocs.cap = 10;
-
-	relocTable->drelocs.filectxIndices = (int*) malloc(sizeof(int) * 10);
-	if (!relocTable->drelocs.filectxIndices) emitError(ERR_MEM, "Failed to allocate memory for dynamic relocation table file context indices");
 
 
 	char* relStrTabData = (char*) malloc(sizeof(char) * 50);
@@ -41,6 +42,42 @@ RelocTable* initRelocTable() {
 }
 
 void deinitRelocTable(RelocTable* relocTable) {
+}
+
+AOEFFDRelTab* initDRelocTable(uint8_t sect, uint32_t nameIndex) {
+	// For dynamic relocation tables, the section will be either text (for fjt) or data (for djt)
+
+	AOEFFDRelTab* drelocTable = (AOEFFDRelTab*) malloc(sizeof(AOEFFDRelTab));
+	if (!drelocTable) emitError(ERR_MEM, "Failed to allocate memory for dynamic relocation table");
+
+	drelocTable->relSect = sect;
+	drelocTable->relTabName = nameIndex;
+	drelocTable->relCount = 0;
+	drelocTable->relEntries = NULL;
+
+	return drelocTable;
+}
+void deinitDRelocTable(AOEFFDRelTab* drelocTable) {}
+
+AOEFFDRelEnt* initDRelocEntry(uint32_t off, uint32_t symb, uint8_t type, int32_t addend) {
+	AOEFFDRelEnt* drelocEntry = (AOEFFDRelEnt*) malloc(sizeof(AOEFFDRelEnt));
+	if (!drelocEntry) emitError(ERR_MEM, "Failed to allocate memory for dynamic relocation entry");
+
+	drelocEntry->reOff = off;
+	drelocEntry->reSymb = symb;
+	drelocEntry->reType = RE_ARU32_DECOMP; // Assuming all dynamic relocations are of this type
+	drelocEntry->reAddend = addend;
+
+	return drelocEntry;
+}
+void deinitDRelocEntry(AOEFFDRelEnt* drelocEntry) {}
+
+void appendDRelocEntry(AOEFFDRelTab* drelocTable, AOEFFDRelEnt* drelocEntry) {
+	drelocTable->relEntries = (AOEFFDRelEnt*) realloc(drelocTable->relEntries, sizeof(AOEFFDRelEnt) * (drelocTable->relCount + 1));
+	if (!drelocTable->relEntries) emitError(ERR_MEM, "Failed to reallocate memory for dynamic relocation entries");
+
+	drelocTable->relEntries[drelocTable->relCount] = *drelocEntry;
+	drelocTable->relCount += 1;
 }
 
 void appendTRelocTable(RelocTable* relocTable, AOEFFTRelTab* treloc, int filectxIndex) {
@@ -90,9 +127,83 @@ void appendTRelocTable(RelocTable* relocTable, AOEFFTRelTab* treloc, int filectx
 
 	relocTable->trelocs.count += 1;
 }
-void appendDRelocTable(RelocTable* relocTable, AOEFFDRelTab* dreloc) {
 
+void appendDRelocTable(RelocTable* relocTable, AOEFFDRelTab* dreloc) {
+	// Append the relocation table to the next available slot
+	// There are only two slots, one for fjt and one for djt
+	// Check if the table already exists (ie if the table is for fjt, and there is already a fjt table)
+	//   If so, only copy over the entries
+	//   If not, add it to the next available slot
+	// Identify the table type based on the section
+
+	int tableIndex = -1;
+	if (dreloc->relSect == 3) { // .text section, fjt
+		tableIndex = 0;
+	} else if (dreloc->relSect == 0) { // .data section, djt
+		tableIndex = 1;
+	} else {
+		emitError(ERR_INVALID_FORMAT, "Dynamic relocation table has invalid section %d", dreloc->relSect);
+	}
+
+	if (relocTable->drelocs.count > tableIndex) {
+		// Table already exists, only copy over entries
+		AOEFFDRelTab* existingTable = &relocTable->drelocs.tables[tableIndex];
+
+		existingTable->relEntries = (AOEFFDRelEnt*) realloc(existingTable->relEntries, sizeof(AOEFFDRelEnt) * (existingTable->relCount + dreloc->relCount));
+		if (!existingTable->relEntries) emitError(ERR_MEM, "Failed to reallocate memory for dynamic relocation entries");
+
+		for (uint32_t i = 0; i < dreloc->relCount; i++) {
+			existingTable->relEntries[existingTable->relCount + i] = dreloc->relEntries[i];
+			trace("Appended dynamic relocation entry %d to existing table: off=0x%X, symb=%d, type=%d, addend=0x%X", i,
+					dreloc->relEntries[i].reOff,
+					dreloc->relEntries[i].reSymb,
+					dreloc->relEntries[i].reType,
+					dreloc->relEntries[i].reAddend);
+		}
+
+		existingTable->relCount += dreloc->relCount;
+	} else {
+		// New table, add it
+		relocTable->drelocs.tables[tableIndex].relSect = dreloc->relSect;
+		relocTable->drelocs.tables[tableIndex].relTabName = dreloc->relTabName;
+		relocTable->drelocs.tables[tableIndex].relCount = dreloc->relCount;
+
+		// Deep copy entries
+		relocTable->drelocs.tables[tableIndex].relEntries = (AOEFFDRelEnt*) malloc(sizeof(AOEFFDRelEnt) * dreloc->relCount);
+		if (!relocTable->drelocs.tables[tableIndex].relEntries) emitError(ERR_MEM, "Failed to allocate memory for dynamic relocation entries");
+
+		for (uint32_t i = 0; i < dreloc->relCount; i++) {
+			relocTable->drelocs.tables[tableIndex].relEntries[i] = dreloc->relEntries[i];
+			trace("Copied dynamic relocation entry %d to new table: off=0x%X, symb=%d, type=%d, addend=0x%X", i,
+					dreloc->relEntries[i].reOff,
+					dreloc->relEntries[i].reSymb,
+					dreloc->relEntries[i].reType,
+					dreloc->relEntries[i].reAddend);
+		}
+	}
+
+	relocTable->drelocs.count = (tableIndex + 1 > relocTable->drelocs.count) ? tableIndex + 1 : relocTable->drelocs.count;
 }
+
+void addUnresolved(RelocTable* relocTable, int relocTableIndex, int relocEntryIndex) {
+	if (relocTable->unresolved.count == relocTable->unresolved.cap) {
+		relocTable->unresolved.cap *= 2;
+		int** newUnresolvedIndices = (int**) realloc(relocTable->unresolved.unresolvedIndices, sizeof(int*) * relocTable->unresolved.cap);
+		if (!newUnresolvedIndices) emitError(ERR_MEM, "Failed to reallocate memory for unresolved symbol indices");
+
+		relocTable->unresolved.unresolvedIndices = newUnresolvedIndices;
+	}
+
+	int* newIndexPair = (int*) malloc(sizeof(int) * 2);
+	if (!newIndexPair) emitError(ERR_MEM, "Failed to allocate memory for unresolved symbol index pair");
+
+	newIndexPair[0] = relocTableIndex;
+	newIndexPair[1] = relocEntryIndex;
+
+	relocTable->unresolved.unresolvedIndices[relocTable->unresolved.count] = newIndexPair;
+	relocTable->unresolved.count += 1;
+}
+
 
 void displayRelocTable(RelocTable* relocTable) {
 	char* typeStr = NULL;
@@ -186,7 +297,7 @@ uint32_t appendRelocString(RelocTable* relocTable, const char* str) {
 	char* strs = relocTable->RelocStringTable.strTab.rstStrs;
 
 	size_t len = strlen(str) + 1; // +1 for null terminator
-	if (relocTable->RelocStringTable.strbCount + len == relocTable->RelocStringTable.strbCap) {
+	if (relocTable->RelocStringTable.strbCount + len >= relocTable->RelocStringTable.strbCap) {
 		relocTable->RelocStringTable.strbCap *= 2;
 
 		strs = (char*) realloc(strs,  sizeof(char) * relocTable->RelocStringTable.strbCap);

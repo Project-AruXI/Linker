@@ -193,13 +193,6 @@ void relocate(RelocTable* relocTable, SectionTable* sectTable, SymbolTable* symb
 
 			rtrace("%4d | 0x%06X |  %5d | %4s | 0x%04X |", j, entry->reOff, entry->reSymb, typeStr, entry->reAddend);
 
-			// For now, skip when symbol index is -1
-			// I don't think this is the case anymore
-			// if (entry->reSymb == (uint8_t)-1) {
-			// 	rlog("Skipping relocation entry %d with symbol index -1", j);
-			// 	continue;
-			// }
-
 			void* sectionData = NULL;
 			if (table->relSect == 0) sectionData = sectTable->_data;
 			else if (table->relSect == 1) sectionData = sectTable->_const;
@@ -219,32 +212,7 @@ void relocate(RelocTable* relocTable, SectionTable* sectTable, SymbolTable* symb
 
 			AOEFFSymEnt* symbEntry = &symbTable->symbols[entry->reSymb];
 
-			int symbFilectxIndex = symbTable->filectxIndices[entry->reSymb];
-			rdetail("Symbol %d belongs to file context index %d", entry->reSymb, symbFilectxIndex);
-			FileCtx* symbolFilectx = &sectTable->filectxs.ctx[symbFilectxIndex];
-
-			// Update reOff to be global offset
-
-			uint32_t sectOffset = 0; // The offset where the defined symbol's section starts globally
-			if (table->relSect == 0) { // .data
-				sectOffset = symbolFilectx->dataOffset;
-				rdetail("Symbol's file context section offset: dataOffset=0x%X", symbolFilectx->dataOffset);
-				rdetail("Resolved to 0x%X in data", sectOffset);
-			} else if (table->relSect == 1) { // .const
-				sectOffset = symbolFilectx->constOffset;
-				rdetail("Symbol's file context section offset: constOffset=0x%X", symbolFilectx->constOffset);
-				rdetail("Resolved to 0x%X in const", sectOffset);
-			} else if (table->relSect == 3) { // .text
-				sectOffset = symbolFilectx->textOffset;
-				rdetail("Symbol's file context section offset: textOffset=0x%X", symbolFilectx->textOffset);
-				rdetail("Resolved to 0x%X in text", sectOffset);
-			} else if (table->relSect == 4) { // .evt
-				sectOffset = 0x0; // Evt section starts at fixed address once
-				rdetail("Symbol's file context section offset: evt fixed offset=0x%X", sectOffset);
-			}
-			rdetail("Symbol's file context section offset: 0x%X", sectOffset);
-
-			// The location to relocate is still needed, indicated by reOff
+			// The location to relocate is needed, indicated by reOff
 			// However, as mentioned, it needs to be updated to global offset
 			uint32_t toRelOffset = entry->reOff;
 			// Update to global offset, dependent on where the section to relocate starts at globally
@@ -265,6 +233,42 @@ void relocate(RelocTable* relocTable, SectionTable* sectTable, SymbolTable* symb
 			// Update it again for it to be in accordance of the section starting point in the final binary
 			// toRelOffset += sectTable->sectionOffsets[table->relSect];
 			// rdetail("Adjusted relocation global offset with final section offset: 0x%X", toRelOffset);
+
+			// In the case that the symbol is undefined, it cannot be statically relocated
+			// This means that the symbol comes from a dynamic library and is to be resolved at load time
+			// Skip such relocations
+			// This is here instead of earlier so that the relOff is updated to use the global in order for it to be converted to dynamic relocation later
+			//   and allow for use in the FJT/DJT
+			if (SE_GET_TYPE(symbEntry->seSymbInfo) == SE_NONE_T && symbEntry->seSymbSect == SE_SECT_UNDEF) {
+				rlog("Skipping relocation entry %d in relocation table %d for undefined symbol %d", j, i, entry->reSymb);
+				entry->reOff = toRelOffset;
+				rlog("Updated unresolved relocation entry %d's reOff to global offset 0x%X", j, entry->reOff);
+				addUnresolved(relocTable, i, j);
+				continue;
+			}
+
+			int symbFilectxIndex = symbTable->filectxIndices[entry->reSymb];
+			rdetail("Symbol %d belongs to file context index %d", entry->reSymb, symbFilectxIndex);
+			FileCtx* symbolFilectx = &sectTable->filectxs.ctx[symbFilectxIndex];
+
+			uint32_t sectOffset = 0; // The offset where the defined symbol's section starts globally
+			if (table->relSect == 0) { // .data
+				sectOffset = symbolFilectx->dataOffset;
+				rdetail("Symbol's file context section offset: dataOffset=0x%X", symbolFilectx->dataOffset);
+				rdetail("Resolved to 0x%X in data", sectOffset);
+			} else if (table->relSect == 1) { // .const
+				sectOffset = symbolFilectx->constOffset;
+				rdetail("Symbol's file context section offset: constOffset=0x%X", symbolFilectx->constOffset);
+				rdetail("Resolved to 0x%X in const", sectOffset);
+			} else if (table->relSect == 3) { // .text
+				sectOffset = symbolFilectx->textOffset;
+				rdetail("Symbol's file context section offset: textOffset=0x%X", symbolFilectx->textOffset);
+				rdetail("Resolved to 0x%X in text", sectOffset);
+			} else if (table->relSect == 4) { // .evt
+				sectOffset = 0x0; // Evt section starts at fixed address once
+				rdetail("Symbol's file context section offset: evt fixed offset=0x%X", sectOffset);
+			}
+			rdetail("Symbol's file context section offset: 0x%X", sectOffset);
 
 			applyRelocation(sectionData, entry, symbEntry, toRelOffset, sectTable->sectionOffsets[symbEntry->seSymbSect]);
 
