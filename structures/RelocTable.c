@@ -210,87 +210,91 @@ void displayRelocTable(RelocTable* relocTable) {
 
 	rtrace("====== Relocation Tables ======");
 
-	rtrace("-- Static Relocation Tables --");
-	rtrace("Total Tables: %d", relocTable->trelocs.count);
-	for (int i = 0; i < relocTable->trelocs.count; i++) {
-		AOEFFTRelTab* table = &relocTable->trelocs.tables[i];
+	if (relocTable->trelocs.count != 0) {
+		rtrace("-- Static Relocation Tables --");
+		rtrace("Total Tables: %d", relocTable->trelocs.count);
+		for (int i = 0; i < relocTable->trelocs.count; i++) {
+			AOEFFTRelTab* table = &relocTable->trelocs.tables[i];
 
-		char* relTabName = &relocTable->RelocStringTable.strTab.rstStrs[table->relTabName];
+			char* relTabName = &relocTable->RelocStringTable.strTab.rstStrs[table->relTabName];
 
-		rtrace("---------------- Table %d -----------------", i);
-		rtrace("Section: %d | Name Index: %d | Name: %s | Entry Count: %d || FileCtx: %d |", table->relSect, table->relTabName, relTabName, table->relCount, relocTable->trelocs.filectxIndices[i]);
-		rtrace("------------------------------------------");
-		rtrace(" Num |  Offset  | Symbol | Type | Addend |");
-		rtrace("------------------------------------------");
-		for (uint32_t j = 0; j < table->relCount; j++) {
-			AOEFFTRelEnt* entry = &table->relEntries[j];
+			rtrace("---------------- Table %d -----------------", i);
+			rtrace("Section: %d | Name Index: %d | Name: %s | Entry Count: %d || FileCtx: %d |", table->relSect, table->relTabName, relTabName, table->relCount, relocTable->trelocs.filectxIndices[i]);
+			rtrace("------------------------------------------");
+			rtrace(" Num |  Offset  | Symbol | Type | Addend |");
+			rtrace("------------------------------------------");
+			for (uint32_t j = 0; j < table->relCount; j++) {
+				AOEFFTRelEnt* entry = &table->relEntries[j];
 
-			switch (entry->reType) {
-				case RE_ARU32_ABS14:
-					typeStr = "ABS14";
-					break;
-				case RE_ARU32_MEM9:
-					typeStr = "MEM9";
-					break;
-				case RE_ARU32_IR24:
-					typeStr = "IR24";
-					break;
-				case RE_ARU32_IR19:
-					typeStr = "IR19";
-					break;
-				case RE_ARU32_DECOMP:
-					typeStr = "DECOMP";
-					break;
-				default:
-					typeStr = "UNKNOWN";
-					break;
+				switch (entry->reType) {
+					case RE_ARU32_ABS14:
+						typeStr = "ABS14";
+						break;
+					case RE_ARU32_MEM9:
+						typeStr = "MEM9";
+						break;
+					case RE_ARU32_IR24:
+						typeStr = "IR24";
+						break;
+					case RE_ARU32_IR19:
+						typeStr = "IR19";
+						break;
+					case RE_ARU32_DECOMP:
+						typeStr = "DECOMP";
+						break;
+					default:
+						typeStr = "UNKNOWN";
+						break;
+				}
+
+				rtrace("%4d | 0x%06X |  %5d | %4s | 0x%04X |", j, entry->reOff, entry->reSymb, typeStr, entry->reAddend);
 			}
-
-			rtrace("%4d | 0x%06X |  %5d | %4s | 0x%04X |", j, entry->reOff, entry->reSymb, typeStr, entry->reAddend);
+			rtrace("------------------------------------------\n");
 		}
-		rtrace("------------------------------------------\n");
-	}
+	} else rtrace("[[ No Static Relocation Tables ]]");
 
-	rtrace("-- Dynamic Relocation Tables --");
-	rtrace("Total Tables: %d%c", relocTable->drelocs.count, (relocTable->drelocs.count != 0) ? '\0' : '\n');
-	for (int i = 0; i < relocTable->drelocs.count; i++) {
-		AOEFFDRelTab* table = &relocTable->drelocs.tables[i];
+	if (relocTable->drelocs.count != 0) {
+		rtrace("-- Dynamic Relocation Tables --");
+		rtrace("Total Tables: %d%c", relocTable->drelocs.count, (relocTable->drelocs.count != 0) ? '\0' : '\n');
+		for (int i = 0; i < relocTable->drelocs.count; i++) {
+			AOEFFDRelTab* table = &relocTable->drelocs.tables[i];
 
-		char* relTabName = &relocTable->RelocStringTable.strTab.rstStrs[table->relTabName];
+			char* relTabName = &relocTable->RelocStringTable.strTab.rstStrs[table->relTabName];
 
-		rtrace("---------------- Table %d -----------------", i);
-		rtrace("Section: %d | Name Index: %d | Name: %s | Entry Count: %d", table->relSect, table->relTabName, relTabName, table->relCount);
-		rtrace("------------------------------------------");
-		rtrace(" Num |  Offset  | Symbol | Type | Addend |");
-		rtrace("------------------------------------------");
-		for (uint32_t j = 0; j < table->relCount; j++) {
-			AOEFFDRelEnt* entry = &table->relEntries[j];
+			rtrace("---------------- Table %d -----------------", i);
+			rtrace("Section: %d | Name Index: %d | Name: %s | Entry Count: %d", table->relSect, table->relTabName, relTabName, table->relCount);
+			rtrace("------------------------------------------");
+			rtrace(" Num |   Offset   | Symbol | Type | Addend |");
+			rtrace("------------------------------------------");
+			for (uint32_t j = 0; j < table->relCount; j++) {
+				AOEFFDRelEnt* entry = &table->relEntries[j];
 
-			switch (entry->reType) {
-				case RE_ARU32_ABS14:
-					typeStr = "ABS14";
-					break;
-				case RE_ARU32_MEM9:
-					typeStr = "MEM9";
-					break;
-				case RE_ARU32_IR24:
-					typeStr = "IR24";
-					break;
-				case RE_ARU32_IR19:
-					typeStr = "IR19";
-					break;
-				case RE_ARU32_DECOMP:
-					typeStr = "DECOMP";
-					break;
-				default:
-					typeStr = "UNKNOWN";
-					break;
+				switch (entry->reType) {
+					case RE_ARU32_ABS14:
+						typeStr = "ABS14";
+						break;
+					case RE_ARU32_MEM9:
+						typeStr = "MEM9";
+						break;
+					case RE_ARU32_IR24:
+						typeStr = "IR24";
+						break;
+					case RE_ARU32_IR19:
+						typeStr = "IR19";
+						break;
+					case RE_ARU32_DECOMP:
+						typeStr = "DECOMP";
+						break;
+					default:
+						typeStr = "UNKNOWN";
+						break;
+				}
+
+				rtrace("%4d | 0x%08X |  %5d | %4s | 0x%04X |", j, entry->reOff, entry->reSymb, typeStr, entry->reAddend);
 			}
-
-			rtrace("%4d | 0x%06X |  %5d | %4s | 0x%04X |", j, entry->reOff, entry->reSymb, typeStr, entry->reAddend);
+			rtrace("------------------------------------------\n");
 		}
-		rtrace("------------------------------------------\n");
-	}
+	} else rtrace("[[ No Dynamic Relocation Tables ]]");
 }
 
 uint32_t appendRelocString(RelocTable* relocTable, const char* str) {

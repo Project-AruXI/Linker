@@ -188,6 +188,7 @@ int main(int argc, char const* argv[]) {
 
 	writeBinary(&config, &globalTables, &importsExports, jumpTables, dyLibTable);
 
+	displayRelocTable(globalTables.relocTable);
 
 
 	// deinitSymbolTable(globalSymTable);

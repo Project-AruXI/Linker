@@ -106,7 +106,7 @@ static AOEFFSectHdr* normalizeSectionHeaders(SectionTable* sectTable, JumpTables
 	// Add .text.fjt section if there are function jump table entries
 	if (jumpTables->fjt.fjtEntryCount != 0) {
 		AOEFFSectHdr* fjtHdr = &newSectHeaders[hdrIdx];
-		memcpy(fjtHdr->shSectName, ".fjt", 8);
+		memcpy(fjtHdr->shSectName, ".fjt", 5);
 		fjtHdr->shSectOff = sectOffset;
 		fjtHdr->shSectSize = jumpTables->fjt.fjtEntryCount * (7 * 4); // Each entry is 7 instructions of 4 bytes each
 
@@ -133,8 +133,6 @@ static AOEFFSectHdr* normalizeSectionHeaders(SectionTable* sectTable, JumpTables
 }
 
 static AOEFFSymEnt* normalizeSymbolTable(SymbolTable* symbTable) {
-	// Insert blank entry
-
 	uint32_t newSize = symbTable->count + 1;
 	AOEFFSymEnt* newSymbEntries = (AOEFFSymEnt*) calloc(newSize, sizeof(AOEFFSymEnt));
 	if (!newSymbEntries) emitError(ERR_MEM, NULL, "Failed to allocate memory for normalized symbol table.");
@@ -213,6 +211,7 @@ void writeBinary(Config* config, GlobalTables* globalTables, struct ImportsExpor
 	FILE* outfile = fopen(config->outfile, "wb");
 	if (!outfile) emitError(ERR_IO, "Failed to open output file %s for writing.", config->outfile);
 
+
 	int sectEntries = 0;
 	for (int i = 0; i < 5; i++) {
 		if (globalTables->sectionTable->sections[i].shSectSize != 0) sectEntries++;
@@ -223,7 +222,6 @@ void writeBinary(Config* config, GlobalTables* globalTables, struct ImportsExpor
 
 	uint32_t symbTableSize = globalTables->symbolTable->count;
 	symbTableSize++; // Ending blank entry
-
 	uint32_t symbOff = sizeof(AOEFFhdr) + (sizeof(AOEFFSectHdr) * sectEntries);
 
 	uint32_t strTabOff = symbOff + (sizeof(AOEFFSymEnt) * symbTableSize);
@@ -237,11 +235,11 @@ void writeBinary(Config* config, GlobalTables* globalTables, struct ImportsExpor
 	// uint32_t trelTabOff = relStrOff + relStrSize;
 	// uint32_t trelTabSize = getTRelTabSize(globalTables->relocTable->trelocs.tables, trelTabCount);
 	uint32_t trelTabCount = 0;
-	uint32_t trelTabOff = relStrOff + relStrSize;
+	uint32_t trelTabOff = 0;
 	uint32_t trelTabSize = 0;
 
 	uint32_t drelTabCount = globalTables->relocTable->drelocs.count;
-	uint32_t drelTabOff = trelTabOff + trelTabSize;
+	uint32_t drelTabOff = relStrOff + relStrSize;
 	uint32_t drelTabSize = getDRelTabSize(globalTables->relocTable->drelocs.tables, drelTabCount);
 	
 	rlog("trelTabOff: 0x%x; trelTabSize: 0x%x", trelTabOff, trelTabSize);
@@ -253,15 +251,15 @@ void writeBinary(Config* config, GlobalTables* globalTables, struct ImportsExpor
 	uint32_t dyLibStrTabSize = 0;
 	AOEFFDyLibEnt* dylibTable = createDynamicLibraryTable(dyLibTable, &dyLibStrTab, &dyLibStrTabSize);
 	uint32_t dylibTableOff = drelTabOff + drelTabSize;
-	uint32_t dylibTableSize = dyLibTable->count * sizeof(AOEFFDyLibEnt);
-	uint32_t dyLibStrTabOff = dylibTableOff + dylibTableSize;
+	uint32_t dylibTableSize = dyLibTable->count;
+	uint32_t dyLibStrTabOff = dylibTableOff + (dylibTableSize * sizeof(AOEFFDyLibEnt));
 
 	uint32_t importTableOff = dyLibStrTabOff + dyLibStrTabSize;
-	uint32_t importTableSize = importsExports->Imports.count * sizeof(AOEFFImportEnt);
+	uint32_t importTableSize = importsExports->Imports.count;
 
-	uint32_t exportTableOff = drelTabOff + drelTabSize;
+	uint32_t exportTableOff = importTableOff + (importTableSize  * sizeof(AOEFFImportEnt));
 	uint32_t exportTableSize = 0;
-	if (config->isDynamic) exportTableSize = importsExports->Exports.count * sizeof(AOEFFExportEnt);
+	if (config->isDynamic) exportTableSize = importsExports->Exports.count;
 
 
 	// Write header info
@@ -270,24 +268,24 @@ void writeBinary(Config* config, GlobalTables* globalTables, struct ImportsExpor
 		.hType = config->isDynamic ? AHT_DLIB : (config->isKernel ? AHT_KERN : AHT_EXEC),
 		.hEntry = getEntrySymbolAddress(globalTables->symbolTable, config),
 		.hSectOff = sizeof(AOEFFhdr),
-		.hSectSize = sectEntries,
-		.hSymbOff = symbOff,
-		.hSymbSize = symbTableSize,
-		.hStrTabOff = strTabOff,
+		.hSectSize = sectEntries-1,
+		.hSymbOff = (symbTableSize > 1) ? symbOff : 0x0,
+		.hSymbSize = symbTableSize-1,
+		.hStrTabOff = (strTabSize > 0) ? strTabOff : 0x0,
 		.hStrTabSize = strTabSize,
-		.hRelStrTabOff = relStrOff,
+		.hRelStrTabOff = (relStrSize > 0) ? relStrOff : 0x0,
 		.hRelStrTabSize = relStrSize,
-		.hTRelTabOff = trelTabOff,
-		.hTRelTabSize = trelTabCount,
+		.hTRelTabOff = 0,
+		.hTRelTabSize = 0,
 		.hDRelTabOff = drelTabOff,
 		.hDRelTabSize = drelTabCount,
-		.hDyLibTabOff = dylibTableOff,
+		.hDyLibTabOff = (dylibTableSize > 0) ? dylibTableOff : 0x0,
 		.hDyLibTabSize = dylibTableSize,
-		.hDyLibStrTabOff = dyLibStrTabOff,
+		.hDyLibStrTabOff = (dyLibStrTabSize > 0) ? dyLibStrTabOff : 0x0,
 		.hDyLibStrTabSize = dyLibStrTabSize,
-		.hImportTabOff = importTableOff,
+		.hImportTabOff = (importTableSize > 0) ? importTableOff : 0x0,
 		.hImportTabSize = importTableSize,
-		.hExportTabOff = exportTableOff,
+		.hExportTabOff = (exportTableSize > 0) ? exportTableOff : 0x0,
 		.hExportTabSize = exportTableSize
 	};
 	fwrite(&header, sizeof(AOEFFhdr), 1, outfile);
@@ -309,31 +307,22 @@ void writeBinary(Config* config, GlobalTables* globalTables, struct ImportsExpor
 
 	uint8_t zeroBufferPadding[4] = {0};
 
-	// Write static relocation tables
-	// for (uint32_t i = 0; i < trelTabCount; i++) {
-	// 	AOEFFTRelTab* tab = &globalTables->relocTable->trelocs.tables[i];
-	// 	rlog("Writing TReloc Table %d: relSect=0x%x, relTabName=0x%x, relCount=%d", i, tab->relSect, tab->relTabName, tab->relCount);
-	// 	fwrite(&tab->relSect, sizeof(uint8_t), 1, outfile);
-	// 	fwrite(zeroBufferPadding, 3, 1, outfile); // padding
-	// 	fwrite(&tab->relTabName, sizeof(uint32_t), 1, outfile);
-	// 	fwrite(&tab->relCount, sizeof(uint32_t), 1, outfile);
-	// 	fwrite(zeroBufferPadding, 4, 1, outfile); // padding
-	// 	fwrite(tab->relEntries, sizeof(AOEFFTRelEnt), tab->relCount, outfile);
-	// }
-
 	// Write dynamic relocation tables
 	for (uint32_t i = 0; i < drelTabCount; i++) {
 		AOEFFDRelTab* tab = &globalTables->relocTable->drelocs.tables[i];
+		rtrace("Writing dynamic relocation table %d at offset 0x%x", i, ftell(outfile));
 		rlog("Writing DReloc Table %d: relSect=0x%x, relTabName=0x%x, relCount=%d", i, tab->relSect, tab->relTabName, tab->relCount);
 		fwrite(&tab->relSect, sizeof(uint8_t), 1, outfile);
-		fwrite(zeroBufferPadding, 3, 1, outfile); // padding
+		fwrite(zeroBufferPadding, sizeof(uint8_t), 3, outfile); // padding
 		fwrite(&tab->relTabName, sizeof(uint32_t), 1, outfile);
 		fwrite(&tab->relCount, sizeof(uint32_t), 1, outfile);
-		fwrite(zeroBufferPadding, 4, 1, outfile); // padding
+		fwrite(zeroBufferPadding, sizeof(uint8_t), 4, outfile); // padding
+		rtrace("Writing %d dynamic relocation entries at offset 0x%x", tab->relCount, ftell(outfile));
 		fwrite(tab->relEntries, sizeof(AOEFFDRelEnt), tab->relCount, outfile);
 	}
 
 	// Write dynamic library table
+	rtrace("Writing dynamic library table at offset 0x%x", ftell(outfile));
 	for (uint32_t i = 0; i < dyLibTable->count; i++) {
 		AOEFFDyLibEnt* dylibEntry = &dylibTable[i];
 		rlog("Writing Dynamic Library Entry %d: nameIndex=%d, name=%s", i, dylibEntry->dlName, &dyLibStrTab.dlstStrs[dylibEntry->dlName]);
@@ -341,9 +330,11 @@ void writeBinary(Config* config, GlobalTables* globalTables, struct ImportsExpor
 	}
 
 	// Write dynamic library string table
+	rtrace("Writing dynamic library string table at offset 0x%x", ftell(outfile));
 	fwrite(dyLibStrTab.dlstStrs, sizeof(char), dyLibStrTabSize, outfile);
 
 	// Write import table
+	rtrace("Writing import table at offset 0x%x", ftell(outfile));
 	for (uint32_t i = 0; i < importsExports->Imports.count; i++) {
 		AOEFFImportEnt* importEntry = &importsExports->Imports.entries[i];
 		rlog("Writing Import Entry %d: symbIndex=%d, symbName=%s", i, importEntry->ieSymb, &globalTables->symbolTable->SymbolStringTable.strTab.stStrs[importEntry->ieSymb]);

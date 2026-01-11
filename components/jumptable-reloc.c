@@ -127,6 +127,8 @@ JumpTables* createJumpTables(RelocTable* relocTable, SymbolTable* symbTable, Sec
 	// No need to free and allocate, just use same space but reset counts
 	relocTable->RelocStringTable.strbCount = 0;
 	relocTable->RelocStringTable.strCount = 0;
+	relocTable->trelocs.count = 0; // Clear static relocations as they are no longer needed
+	
 
 	uint32_t startAddrFJT = sectTable->sections[SECT_TEXT].shSectSize + sectTable->sectionOffsets[SECT_TEXT];
 	uint32_t startAddrDJT = sectTable->sections[SECT_DATA].shSectSize + sectTable->sectionOffsets[SECT_DATA];
@@ -177,7 +179,7 @@ JumpTables* createJumpTables(RelocTable* relocTable, SymbolTable* symbTable, Sec
 
 			// Create and append dynamic relocation entry for FJT
 			AOEFFDRelEnt* drelocEntry = initDRelocEntry(absoluteFjtEntryAddr, relEntry->reSymb, RE_ARU32_DECOMP, relEntry->reAddend);
-			AOEFFDRelTab* drelocTable = initDRelocTable(3, appendRelocString(relocTable, symbName));
+			AOEFFDRelTab* drelocTable = initDRelocTable(3, appendRelocString(relocTable, ".drel.fjt"));
 			appendDRelocEntry(drelocTable, drelocEntry);
 			appendDRelocTable(relocTable, drelocTable);
 
