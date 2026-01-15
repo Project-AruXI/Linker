@@ -36,6 +36,15 @@ windows: arxlnk
 debug: CFLAGS += -g -DDEBUG -O0
 debug: arxlnk
 
+sample: debug
+	(cd ../Kernel/ && make)
+	mv ../Kernel/kern.ark ../Emulator/out
+	(cd ./samples/dlib/ && make)
+	cp ./samples/dlib/std.adlib ../Emulator/out
+	(cd ./samples/exe/ && make)
+	mv ./samples/exe/file.arx ../Emulator/out
+
+
 clean:
 	rm -f **/*.o
 	rm linker.o

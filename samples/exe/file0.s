@@ -1,10 +1,14 @@
+.extern read % from std.adlib
+
+
 .extern file1Fxn
 
 .text
-.glob _init
-_init:
+.glob main
+main:
 	mv x0, #0x1
 	call file1Fxn
+	call read
 	ub _deinit
 
 _deinit:
