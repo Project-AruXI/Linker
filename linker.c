@@ -13,7 +13,7 @@
 
 Config config = {
 	.outfile = "out.aru",
-	.useStdLib = false, // For now, there is no stdlib
+	.useStdLib = true,
 	.isKernel = false,
 	.isDynamic = false,
 	.libpath = { "./libs", NULL },
@@ -125,8 +125,8 @@ int main(int argc, char const* argv[]) {
 	}
 
 	// Validate that the linked libraries exists
-	 DynamicLibraries* dyLibTable = verifyLibraries(&config);
-	 displayDynamicLibraries(dyLibTable);
+	DynamicLibraries* dyLibTable = verifyLibraries(&config);
+	displayDynamicLibraries(dyLibTable);
 
 	uint32_t dataStart = 0x0;
 	uint32_t constStart = 0x0;
@@ -135,7 +135,7 @@ int main(int argc, char const* argv[]) {
 
 	if (config.isKernel) {
 		dataStart = 0xA0080000;
-		textStart = 0xD0080000;
+		textStart = 0xB8080000;
 	} else if (!config.isKernel && !config.isDynamic) {
 		// Not kernel and not dynamic means its a normal executable
 		dataStart = 0x20090000;

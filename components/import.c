@@ -42,7 +42,10 @@ DynamicLibraries* verifyLibraries(Config* config) {
 	char* missingLibs[MAX_LIBS];
 	uint32_t missingLibCount = 0;
 
-	for (uint32_t i = 0; config->libs[i]; i++) {
+	uint32_t i = 0;
+	if (!config->useStdLib || config->isKernel) i = 1; // First library is always stdlib
+
+	for (; config->libs[i]; i++) {
 		const char* libName = config->libs[i];
 		bool found = false;
 
