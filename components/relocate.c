@@ -61,7 +61,7 @@ static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymE
 			// Lp is stored as the offset of this relocation
 			*location &= ~(0xFFFFFF); // Clear bits 0-23
 
-			newSigned32Data = (int32_t)(((symbValue + relEntry->reAddend) - (baseOffset + toRelOffset)) >> 2);
+			newSigned32Data = (int32_t)(((symbValue + relEntry->reAddend) - (baseOffset + toRelOffset)) << 2);
 			rdetail("Computed new IR24 data: 0x%X (symbValue=0x%X, addend=0x%X, reOff=0x%X, baseOffset=0x%X)", 
 					newSigned32Data, symbValue, relEntry->reAddend, toRelOffset, baseOffset);
 
@@ -71,7 +71,7 @@ static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymE
 			// Same case as IR24
 			*location &= ~(0x7FFFF << 5); // Clear bits 5-23
 
-			newSigned32Data = (int32_t)(((symbValue + relEntry->reAddend) - (baseOffset + toRelOffset)) >> 2);
+			newSigned32Data = (int32_t)(((symbValue + relEntry->reAddend) - (baseOffset + toRelOffset)) << 2);
 			rdetail("Computed new IR19 data: 0x%X", newSigned32Data);
 
 			*location |= ((newSigned32Data & 0x7FFFF) << 5);
@@ -89,7 +89,7 @@ static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymE
 			// In the case of an absolute number, baseOffset is not applied since it does not refer to an address
 
 			if (SE_GET_TYPE(symbEntry->seSymbInfo) != SE_ABSV_T) {
-				fullNumber += baseOffset;
+				// fullNumber += baseOffset;
 				rdetail("Relocated symbol is not absolute, full address to decompose: 0x%X", fullNumber);
 			} else rdetail("Relocated symbol is absolute, full number to decompose: 0x%X", fullNumber);
 
@@ -104,12 +104,12 @@ static void applyRelocation(void* sectionData, AOEFFTRelEnt* relEntry, AOEFFSymE
 			*location |= (high14 << 10);
 
 			// Apply mid 14 bits
-			uint32_t* midLocation = location + 1;
+			uint32_t* midLocation = location + 2;
 			*midLocation &= ~(0x3FFF << 10); // Clear bits 10-23
 			*midLocation |= (mid14 << 10);
 
 			// Apply low 4 bits
-			uint32_t* lowLocation = location + 2;
+			uint32_t* lowLocation = location + 5;
 			*lowLocation &= ~(0xF << 10); // Clear bits 10-13
 			*lowLocation |= (low4 << 10);
 			break;

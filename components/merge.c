@@ -38,7 +38,7 @@ void updateSymbolAddressValue(AOEFFSymEnt* addedSymbol, const char* symName, Fil
 	else if (addedSymbol->seSymbSect == 0) sectionGlobalOffset = filectx.dataOffset + memOffsets[0];
 	else if (addedSymbol->seSymbSect == 1) sectionGlobalOffset = filectx.constOffset + memOffsets[1];
 	else if (addedSymbol->seSymbSect == 2) sectionGlobalOffset = filectx.bssOffset + memOffsets[2]; // BSS section starts at its memory offset
-	else if (addedSymbol->seSymbSect == 4) sectionGlobalOffset = 0x0; // Evt section fixed address
+	else if (addedSymbol->seSymbSect == 4) sectionGlobalOffset = 0x00040000;
 	else emitError(ERR_INTERNAL, "Unsupported section index %d for symbol %s while updating symbol value", addedSymbol->seSymbSect, symName);
 
 	log("Updating symbol %s's value from 0x%X to 0x%X (section global offset 0x%X, original value 0x%X)", 
@@ -309,7 +309,7 @@ void merge(const char* infile, GlobalTables* globalTables) {
 		// The old value is just an offset in the (local) section
 		// The new value is the global section's offset + the old value
 		if (SE_GET_TYPE(addedSymbol->seSymbInfo) != SE_NONE_T || addedSymbol->seSymbSect != SE_SECT_UNDEF) {
-			updateSymbolAddressValue(addedSymbol, symName, filectx, globalTables->sectionTable->sectionOffsets);
+			if (SE_GET_TYPE(addedSymbol->seSymbInfo) != SE_ABSV_T) updateSymbolAddressValue(addedSymbol, symName, filectx, globalTables->sectionTable->sectionOffsets);
 
 			globalTables->symbolTable->filectxIndices[globalTables->symbolTable->count - 1] = filectxIndex;
 		} else {
