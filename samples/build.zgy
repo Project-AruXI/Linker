@@ -1,0 +1,21 @@
+{
+  .name = "samples",
+  .version = "0.0.0",
+  .outbin = "./out",
+  .targets = [
+    {
+      .name = "lib",
+      .bin = "std",
+      .type = "library",
+      .sourceDirs = ["./dlib"],
+      .linkerOptions = ["no-stdlib"]
+	  },
+    {
+      .name = "exe",
+      .bin = "file",
+      .type = "executable",
+      .sourceDirs = ["./exe"],
+      .libraryDirs = ["./out"]
+    }
+  ]
+}

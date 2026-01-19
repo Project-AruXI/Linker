@@ -37,13 +37,12 @@ debug: CFLAGS += -g -DDEBUG -O0
 debug: arxlnk
 
 sample: debug
-	(cd ../Kernel/ && make)
-	mv ../Kernel/kern.ark ../Emulator/out
-	(cd ./samples/dlib/ && make)
-	cp ./samples/dlib/std.adlib ../Emulator/out
-	(cd ./samples/exe/ && make)
-	mv ./samples/exe/file.arx ../Emulator/out
+	(cd ./samples/ && arx build lib && arx build exe)
+	mv ./samples/out/std.adlib ../Emulator/out
+	mv ./samples/out/file.arx ../Emulator/out
 
+	(cd ../Kernel/ && arx build)
+	mv ../Kernel/kern.ark ../Emulator/out
 
 clean:
 	rm -f **/*.o
