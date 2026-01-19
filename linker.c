@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "argparse.h"
 #include "diagnostics.h"
@@ -13,19 +14,39 @@
 
 Config config = {
 	.outfile = "out.aru",
-	.useStdLib = true,
+	.noStdLib = false,
 	.isKernel = false,
 	.isDynamic = false,
 	.libpath = { "./libs", NULL },
-	.libs    = { "std.adlib", NULL },
+	.libs    = { "std", NULL },
 };
 
 
 static int linkLibCallback(struct argparse* self, const struct argparse_option* option) {
+	if (!self->optvalue) {
+		emitWarning(WARN_INVALID, "No library name specified.");
+		return 0;
+	}
+
 	// Each time this is called, a new library is being added
 	// Find the first NULL entry in config.libs and add it there
 	for (int i = 1; i < MAX_LIBS; i++) {
 		if (config.libs[i] == NULL) {
+			// In the case the linked library ends with .adlib, take it out
+			// If it has a suffix other than .adlib, issue a warning and ignore
+			// If it has no suffix, assume it's correct
+			size_t len = strlen(self->optvalue);
+			if (len > 7 && strcmp(&self->optvalue[len - 7], ".adlib") == 0) {
+				// Valid .adlib suffix, remove it
+				((char*)self->optvalue)[len - 7] = '\0';
+			} else if (len > 4) {
+				// Has a suffix, but not .adlib
+				emitWarning(WARN_INVALID, "Linked library %s has an unrecognized suffix, expected .adlib. Ignoring suffix.", self->optvalue);
+			} else if (strcmp(self->optvalue, ".adlib") == 0) {
+				// Only suffix, no library name
+				emitWarning(WARN_INVALID, "Linked library name is missing before .adlib suffix. Ignoring.");
+			} // Else, no suffix, assume it's correct
+
 			config.libs[i] = (char*) self->optvalue;
 			config.libs[i + 1] = NULL;
 			break;
@@ -59,9 +80,9 @@ static const char** parseArgs(int argc, char const* argv[]) {
 		OPT_BOOLEAN('v', "version", &showVersion, "show version and exit", NULL, 0, 0),
 		OPT_BOOLEAN('k', "kernel", &config.isKernel, "build as a kernel binary", NULL, 0, 0),
 		OPT_BOOLEAN('d', "dynamic", &config.isDynamic, "build as a dynamic library", NULL, 0, 0),
-		OPT_STRING('l', "library", NULL, "library to link against", &linkLibCallback, 0, 0),
-		OPT_STRING('L', "libpath", NULL, "library search path", &libpathCallback, 0, 0),
-		OPT_BOOLEAN(0, "no-stdlib", &config.useStdLib, "do not link against the standard library", NULL, 0, 0),
+		OPT_STRING(0, "library", NULL, "library to link against", &linkLibCallback, 0, 0),
+		OPT_STRING(0, "libpath", NULL, "library search path", &libpathCallback, 0, 0),
+		OPT_BOOLEAN(0, "no-stdlib", &config.noStdLib, "do not link against the standard library", NULL, 0, 0),
 		OPT_HELP(),
 		OPT_END(),
 	};
@@ -87,7 +108,7 @@ static const char** parseArgs(int argc, char const* argv[]) {
 	}
 
 	// Remaining arguments after options are input files
-	if (argc - nparsed <= 1) {
+	if (nparsed == 0) {
 		fprintf(stderr, "No input file specified.\n");
 		argparse_usage(&argparse);
 		exit(-1);
