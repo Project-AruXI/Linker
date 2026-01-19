@@ -15,7 +15,7 @@
 
 typedef struct Config {
 	const char* outfile;
-	bool useStdLib; // Whether to link against the standard library
+	bool noStdLib; // Whether to link against the standard library
 	bool isKernel; // Whether to build as a kernel binary
 	bool isDynamic; // Whether to build as a dynamic library
 	char* libpath[MAX_LIBPATHS]; // The library search path
