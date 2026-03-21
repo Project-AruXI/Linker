@@ -58,7 +58,7 @@ static uint32_t getEntrySymbolAddress(SymbolTable* symbTable, Config* config) {
 	char* entrySymbolName = NULL;
 	if (config->isKernel) {
 		entrySymbolName = "__onStart";
-	} else if (config->useStdLib) entrySymbolName = "main";
+	} else if (!config->noStdLib) entrySymbolName = "main";
 	else entrySymbolName = "_init";
 
 	int entrySymbIndex = getSymbolByName(symbTable, entrySymbolName, 0);
@@ -241,7 +241,7 @@ void writeBinary(Config* config, GlobalTables* globalTables, struct ImportsExpor
 	uint32_t drelTabCount = globalTables->relocTable->drelocs.count;
 	uint32_t drelTabOff = relStrOff + relStrSize;
 	uint32_t drelTabSize = getDRelTabSize(globalTables->relocTable->drelocs.tables, drelTabCount);
-	
+
 	rlog("trelTabOff: 0x%x; trelTabSize: 0x%x", trelTabOff, trelTabSize);
 	rlog("drelTabOff: 0x%x; drelTabSize: 0x%x", drelTabOff, drelTabSize);
 
@@ -291,7 +291,7 @@ void writeBinary(Config* config, GlobalTables* globalTables, struct ImportsExpor
 	fwrite(&header, sizeof(AOEFFhdr), 1, outfile);
 
 	// Write section headers
-	AOEFFSectHdr* sectHeaders = normalizeSectionHeaders(globalTables->sectionTable, jumpTables, exportTableOff + exportTableSize);
+	AOEFFSectHdr* sectHeaders = normalizeSectionHeaders(globalTables->sectionTable, jumpTables, exportTableOff + (exportTableSize * sizeof(AOEFFExportEnt)));
 	fwrite(sectHeaders, sizeof(AOEFFSectHdr), sectEntries, outfile);
 
 	// Write symbol table

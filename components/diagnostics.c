@@ -20,8 +20,9 @@ static char* errnames[ERR_TOO_MANY_LIBS + 1] = {
 	"TOO MANY LIBRARIES LINKED"
 };
 
-static char* warnnames[WARN_UNIMPLEMENTED + 1] = {
-	"UNIMPLEMENTED FEATURE"
+static char* warnnames[WARN_INVALID + 1] = {
+	"UNIMPLEMENTED FEATURE",
+	"INVALID"
 };
 
 static void formatMessage(const char* fmsg, va_list args) {

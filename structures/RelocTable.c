@@ -59,7 +59,7 @@ AOEFFDRelTab* initDRelocTable(uint8_t sect, uint32_t nameIndex) {
 }
 void deinitDRelocTable(AOEFFDRelTab* drelocTable) {}
 
-AOEFFDRelEnt* initDRelocEntry(uint32_t off, uint32_t symb, uint8_t type, int32_t addend) {
+AOEFFDRelEnt* initDRelocEntry(uint32_t off, uint8_t symb, uint8_t type, int32_t addend) {
 	AOEFFDRelEnt* drelocEntry = (AOEFFDRelEnt*) malloc(sizeof(AOEFFDRelEnt));
 	if (!drelocEntry) emitError(ERR_MEM, "Failed to allocate memory for dynamic relocation entry");
 
@@ -241,6 +241,15 @@ void displayRelocTable(RelocTable* relocTable) {
 						break;
 					case RE_ARU32_DECOMP:
 						typeStr = "DECOMP";
+						break;
+					case RE_ARU32_ABS8:
+						typeStr = "ABS8";
+						break;
+					case RE_ARU32_ABS16:
+						typeStr = "ABS16";
+						break;
+					case RE_ARU32_ABS32:
+						typeStr = "ABS32";
 						break;
 					default:
 						typeStr = "UNKNOWN";

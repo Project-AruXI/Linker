@@ -43,7 +43,7 @@ DynamicLibraries* verifyLibraries(Config* config) {
 	uint32_t missingLibCount = 0;
 
 	uint32_t i = 0;
-	if (!config->useStdLib || config->isKernel) i = 1; // First library is always stdlib
+	if (config->noStdLib || config->isKernel) i = 1; // First library is always stdlib
 
 	for (; config->libs[i]; i++) {
 		const char* libName = config->libs[i];
@@ -53,7 +53,7 @@ DynamicLibraries* verifyLibraries(Config* config) {
 			const char* searchPath = config->libpath[j];
 
 			char fullPath[512];
-			snprintf(fullPath, sizeof(fullPath), "%s/%s", searchPath, libName);
+			snprintf(fullPath, sizeof(fullPath), "%s/%s.adlib", searchPath, libName);
 
 			FILE* file = fopen(fullPath, "rb");
 			if (file) {

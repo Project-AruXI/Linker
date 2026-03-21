@@ -24,6 +24,7 @@ typedef enum {
 
 typedef enum {
 	WARN_UNIMPLEMENTED,
+	WARN_INVALID,
 } warnType;
 
 void emitError(errType err, const char* fmsg, ...);

@@ -49,7 +49,7 @@ void deinitRelocTable(RelocTable* relocTable);
 AOEFFDRelTab* initDRelocTable(uint8_t sect, uint32_t nameIndex);
 void deinitDRelocTable(AOEFFDRelTab* drelocTable);
 
-AOEFFDRelEnt* initDRelocEntry(uint32_t off, uint32_t symb, uint8_t type, int32_t addend);
+AOEFFDRelEnt* initDRelocEntry(uint32_t off, uint8_t symb, uint8_t type, int32_t addend);
 void deinitDRelocEntry(AOEFFDRelEnt* drelocEntry);
 
 void appendDRelocEntry(AOEFFDRelTab* drelocTable, AOEFFDRelEnt* drelocEntry);
